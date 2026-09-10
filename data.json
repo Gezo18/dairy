@@ -1,0 +1,21 @@
+{
+  "users": [],
+  "stories": [
+    {
+      "id": "4edc7f5d-f8e7-4308-98ab-6a4bdb64bc4c",
+      "text": "A browser smoke test story",
+      "author": {
+        "id": "anonymous",
+        "name": "You"
+      },
+      "audience": "Friends",
+      "feeling": "Curious",
+      "place": "Home",
+      "photo": "",
+      "createdAt": "2026-09-06T23:56:53.307Z",
+      "likes": 21,
+      "comments": 0,
+      "commentList": []
+    }
+  ]
+}

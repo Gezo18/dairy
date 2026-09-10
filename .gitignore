@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.*
+!.env.example
+dairy.sqlite
+dairy.sqlite-shm
+dairy.sqlite-wal
+.netlify/# Local Netlify folder
+.netlify
+dairy.sqlite
+dairy.sqlite-shm
+dairy.sqlite-wal
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example

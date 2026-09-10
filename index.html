@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="description" content="Dairy is a friendly place to share the stories that make up your day.">
+	<title>Dairy - Share your story</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+	<style>
+		:root {
+			--ink: #27363a;
+			--muted: #718080;
+			--paper: #f4f2ed;
+			--card: #fffdfa;
+			--green: #557568;
+			--green-light: #e0ebe2;
+			--coral: #e9856d;
+			--line: #e1e5de;
+			--yellow: #f3ca72;
+			--shadow: 0 10px 30px rgba(45, 68, 59, 0.08);
+		}
+
+		* { box-sizing: border-box; }
+		body { margin: 0; color: var(--ink); background: var(--paper); font-family: "DM Sans", sans-serif; line-height: 1.5; }
+		a { color: inherit; text-decoration: none; }
+		button, input, textarea { font: inherit; }
+		button { cursor: pointer; }
+		.shell { width: min(1180px, calc(100% - 40px)); margin: auto; }
+
+		header { position: sticky; top: 0; z-index: 5; background: rgba(255, 253, 250, 0.94); border-bottom: 1px solid var(--line); backdrop-filter: blur(12px); }
+		nav { display: flex; align-items: center; justify-content: space-between; min-height: 72px; gap: 24px; }
+		.brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 0.02em; }
+		.brand-mark { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 12px 12px 12px 4px; color: white; background: var(--green); font-family: Georgia, serif; font-size: 1.25rem; }
+		.search { display: flex; align-items: center; gap: 10px; width: min(310px, 33vw); padding: 10px 15px; color: var(--muted); background: var(--paper); border: 1px solid transparent; border-radius: 9px; }
+		.search:focus-within { border-color: var(--green); }
+		.search input { width: 100%; border: 0; outline: 0; color: var(--ink); background: transparent; }
+		.nav-actions { display: flex; align-items: center; gap: 12px; }
+		.icon-button { display: grid; width: 40px; height: 40px; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: var(--green); background: var(--card); font-size: 1.15rem; }
+		.icon-button:hover { background: var(--green-light); }
+		.avatar { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 50%; color: #725342; background: #f0c7a9; font-weight: 700; }
+		.avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+		.avatar.has-image { background: transparent; }
+
+		main { display: grid; grid-template-columns: 220px minmax(0, 600px) 240px; gap: 28px; align-items: start; padding: 34px 0 70px; }
+		aside { position: sticky; top: 98px; }
+		.side-menu { display: grid; gap: 5px; }
+		.side-menu a { display: flex; align-items: center; gap: 13px; padding: 11px 13px; border-radius: 8px; color: var(--muted); font-size: 0.92rem; }
+		.side-menu a:hover, .side-menu a.active { color: var(--green); background: var(--green-light); font-weight: 700; }
+		.side-icon { width: 21px; text-align: center; font-size: 1.1rem; }
+		.side-note { margin-top: 36px; padding: 17px; border-top: 2px solid var(--coral); color: var(--muted); font-size: 0.8rem; }
+		.side-note strong { display: block; margin-bottom: 5px; color: var(--ink); font-family: "Playfair Display", Georgia, serif; font-size: 1.15rem; }
+
+		.feed-heading { display: flex; justify-content: space-between; align-items: end; margin-bottom: 18px; }
+		.eyebrow { display: block; margin-bottom: 5px; color: var(--coral); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; }
+		h1, h2, h3, p { margin-top: 0; }
+		h1, h2, h3 { font-family: "Playfair Display", Georgia, serif; line-height: 1.15; }
+		h1 { margin-bottom: 0; font-size: 2.25rem; }
+		.feed-heading p { margin: 0; color: var(--muted); font-size: 0.85rem; }
+
+		.composer, .post, .right-panel { padding: 20px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+		.composer-top { display: flex; gap: 13px; }
+		.composer textarea { flex: 1; min-height: 68px; padding: 12px 14px; resize: vertical; border: 1px solid var(--line); border-radius: 8px; outline: 0; color: var(--ink); background: var(--paper); }
+		.composer textarea:focus { border-color: var(--green); }
+		.composer-bottom { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 15px; padding-top: 14px; border-top: 1px solid var(--line); }
+		.composer-tools { display: flex; gap: 5px; }
+		.tool { padding: 8px 9px; border: 0; border-radius: 6px; color: var(--muted); background: transparent; font-size: 0.82rem; }
+		.tool:hover { color: var(--green); background: var(--green-light); }
+		.button { min-height: 38px; padding: 0 17px; border: 0; border-radius: 7px; color: white; background: var(--green); font-size: 0.84rem; font-weight: 700; }
+		.button:hover { background: #45675a; }
+
+		.stories { display: flex; gap: 14px; overflow-x: auto; margin: 18px 0; padding: 6px 2px; }
+		.story { flex: 0 0 72px; text-align: center; cursor: pointer; }
+		.story-ring { position: relative; display: grid; width: 66px; height: 66px; margin: auto auto 6px; place-items: center; border-radius: 50%; padding: 3px; background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); }
+		.story-ring.mine { background: var(--line); }
+		.story-avatar { width: 100%; height: 100%; border-radius: 50%; color: #725342; background: #f0c7a9; font-weight: 700; display: grid; place-items: center; border: 3px solid var(--card); }
+		.story:first-child .story-ring { background: var(--green); }
+		.story:first-child .story-avatar { background: var(--green-light); color: var(--green); }
+		.story-name { display: block; overflow: hidden; color: var(--muted); font-size: 0.72rem; text-overflow: ellipsis; white-space: nowrap; }
+		.story-add { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.35); border-radius: 50%; color: white; font-size: 1.6rem; }
+		.story-viewer { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,0.95); display: none; flex-direction: column; }
+		.story-viewer.open { display: flex; }
+		.story-progress { display: flex; gap: 4px; padding: 10px; }
+		.story-progress-bar { flex: 1; height: 3px; background: rgba(255,255,255,0.25); border-radius: 2px; overflow: hidden; }
+		.story-progress-fill { height: 100%; background: white; width: 0%; border-radius: 2px; }
+		.story-progress-fill.done { width: 100%; }
+		.story-progress-fill.active { width: 100%; transition: width 5s linear; }
+		.story-media { flex: 1; display: grid; place-items: center; }
+		.story-media img, .story-media video { max-width: 100%; max-height: 100%; object-fit: contain; }
+		.story-close { position: absolute; top: 14px; right: 14px; z-index: 51; width: 36px; height: 36px; border: 0; border-radius: 50%; background: rgba(0,0,0,0.5); color: white; font-size: 1.2rem; cursor: pointer; }
+		.story-text { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); color: white; font-weight: 700; font-size: 1.1rem; text-shadow: 0 2px 8px rgba(0,0,0,0.6); text-align: center; max-width: 80%; }
+		.story-modal { position: fixed; inset: 0; z-index: 40; display: none; place-items: center; padding: 20px; background: rgba(0,0,0,0.6); }
+		.story-modal.open { display: grid; }
+		.story-modal-card { width: min(100%, 420px); padding: 24px; background: var(--card); border-radius: 12px; box-shadow: var(--shadow); }
+		.story-modal-card h2 { margin: 0 0 14px; font-size: 1.4rem; }
+		.story-modal-card input, .story-modal-card textarea { width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px; font: inherit; }
+		.story-modal-card textarea { min-height: 80px; resize: vertical; }
+		.story-modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+		.post { margin-top: 16px; }
+		.post-header { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+		.person { display: flex; align-items: center; gap: 11px; }
+		.person-details strong { display: block; font-size: 0.9rem; }
+		.person-details small { color: var(--muted); font-size: 0.73rem; }
+		.post-menu { border: 0; color: var(--muted); background: transparent; font-size: 1.2rem; }
+		.post-copy { margin: 17px 0 14px; font-size: 0.94rem; }
+		.post-image { display: block; width: 100%; min-height: 210px; border-radius: 8px; color: #735a45; background: #e8d5b8; font-family: "Playfair Display", Georgia, serif; font-size: 1.55rem; text-align: center; overflow: hidden; }
+		.post-image img, .post-image video { display: block; width: 100%; height: auto; min-height: 210px; object-fit: cover; }
+		.post-image.green { color: #f9f7ed; background: var(--green); }
+		.post-image span { max-width: 260px; }
+		.post-media { display: grid; gap: 10px; margin: 14px 0; }
+		.post-meta { display: flex; justify-content: space-between; padding: 12px 0; color: var(--muted); font-size: 0.76rem; }
+		.post-actions { display: flex; gap: 4px; border-top: 1px solid var(--line); padding-top: 9px; }
+		.post-action { flex: 1; padding: 8px; border: 0; border-radius: 6px; color: var(--muted); background: transparent; font-size: 0.82rem; font-weight: 600; }
+		.post-action:hover { color: var(--green); background: var(--green-light); }
+		.post-action.active { color: var(--coral); background: #fff1ec; }
+		.post-delete { margin-left: auto; border: 0; color: var(--muted); background: transparent; font-size: 0.78rem; font-weight: 700; }
+		.post-delete:hover { color: #b34f3d; }
+		.composer-options { display: none; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-top: 12px; }
+		.composer-options.open { display: grid; }
+		.composer-options input, .composer-options select, .settings-form input, .settings-form select { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 7px; color: var(--ink); background: var(--paper); outline: 0; font-size: .8rem; }
+		.media-picker { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-top: 12px; }
+		.media-picker input { max-width: 100%; color: var(--muted); font-size: .78rem; }
+		.media-preview { display: flex; gap: 8px; flex-wrap: wrap; width: 100%; }
+		.media-preview img, .media-preview video { width: 78px; height: 58px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); }
+		.composer-options input:focus, .composer-options select:focus, .settings-form input:focus, .settings-form select:focus { border-color: var(--green); }
+		.view { display: none; }
+		.view.active { display: block; }
+		.view-intro { margin-bottom: 20px; }
+		.view-intro p { color: var(--muted); font-size: .88rem; }
+		.empty-state { padding: 34px 20px; text-align: center; color: var(--muted); background: var(--card); border: 1px dashed var(--line); border-radius: 12px; }
+		.settings-form { display: grid; gap: 15px; padding: 20px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+		.settings-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+		.danger-button { padding: 8px 10px; border: 1px solid #d47762; border-radius: 7px; color: #b34f3d; background: transparent; font-size: .78rem; font-weight: 700; }
+		.profile-card { padding: 24px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); margin-bottom: 22px; }
+		.profile-header { display: flex; gap: 18px; align-items: center; margin-bottom: 18px; }
+		.profile-avatar { width: 72px; height: 72px; font-size: 1.6rem; }
+		.profile-name { margin: 4px 0 0; font-size: 1.05rem; font-weight: 700; color: var(--ink); }
+		.profile-meta { margin: 0; color: var(--muted); font-size: .82rem; }
+		.profile-stats { display: flex; gap: 24px; padding-top: 14px; border-top: 1px solid var(--line); }
+		.profile-stat { display: grid; gap: 2px; text-align: center; }
+		.profile-stat strong { font-size: 1.05rem; color: var(--ink); }
+		.profile-stat span { color: var(--muted); font-size: .72rem; }
+		.inbox { display: grid; grid-template-columns: 280px 1fr; border: 1px solid var(--line); border-radius: 12px; background: var(--card); box-shadow: var(--shadow); overflow: hidden; min-height: 520px; }
+		.inbox-sidebar { border-right: 1px solid var(--line); padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+		.inbox-heading { margin: 0; }
+		.inbox-heading h1 { font-size: 1.35rem; margin: 4px 0 0; }
+		.inbox-new { width: 100%; }
+		.conversation-list { display: grid; gap: 6px; overflow: auto; }
+		.conversation-item { display: flex; gap: 10px; align-items: center; padding: 10px; border-radius: 10px; border: 1px solid transparent; background: transparent; color: inherit; font: inherit; text-align: left; }
+		.conversation-item:hover, .conversation-item.active { background: var(--paper); border-color: var(--line); }
+		.conversation-item .avatar { width: 36px; height: 36px; font-size: .8rem; }
+		.conversation-meta { display: grid; gap: 2px; min-width: 0; }
+		.conversation-meta strong { font-size: .85rem; }
+		.conversation-meta span { color: var(--muted); font-size: .72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+		.inbox-chat { display: flex; flex-direction: column; }
+		.inbox-placeholder { margin: auto; padding: 34px 20px; color: var(--muted); text-align: center; }
+		.inbox-messages { flex: 1; padding: 18px; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+		.inbox-message { max-width: 70%; padding: 10px 12px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); }
+		.inbox-message.mine { margin-left: auto; background: var(--green-light); border-color: #cfe3d2; }
+		.inbox-message strong { display: block; font-size: .75rem; margin-bottom: 4px; color: var(--ink); }
+		.inbox-message p { margin: 0; font-size: .88rem; }
+		.inbox-message time { display: block; margin-top: 6px; color: var(--muted); font-size: .7rem; text-align: right; }
+		.inbox-composer { display: flex; gap: 10px; padding: 14px; border-top: 1px solid var(--line); }
+		.inbox-composer input { flex: 1; padding: 10px 11px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--paper); outline: 0; }
+		.inbox-composer input:focus { border-color: var(--green); }
+		@media (max-width: 700px) {
+			.inbox { grid-template-columns: 1fr; }
+			.inbox-sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
+		}
+		.view-search { display: flex; align-items: center; gap: 9px; margin-bottom: 18px; padding: 10px 13px; color: var(--muted); background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+		.view-search input { width: 100%; border: 0; outline: 0; color: var(--ink); background: transparent; }
+		.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+		.field { display: grid; gap: 6px; color: var(--muted); font-size: .78rem; font-weight: 700; }
+		.check-row { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .82rem; }
+		.check-row input { accent-color: var(--green); }
+		.toast { position: fixed; right: 20px; bottom: 20px; z-index: 10; padding: 12px 16px; color: white; background: var(--ink); border-radius: 7px; box-shadow: var(--shadow); font-size: .82rem; }
+		.auth-panel { display: none; position: fixed; inset: 0; z-index: 20; place-items: center; padding: 20px; background: rgba(39, 54, 58, .38); }
+		.auth-panel.open { display: grid; }
+		.auth-card { width: min(100%, 390px); padding: 24px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 70px rgba(39, 54, 58, .2); }
+		.auth-card h2 { margin-bottom: 8px; font-size: 1.7rem; }
+		.auth-card p { color: var(--muted); font-size: .84rem; }
+		.auth-fields { display: grid; gap: 11px; margin: 18px 0; }
+		.auth-fields input { width: 100%; padding: 10px 11px; border: 1px solid var(--line); border-radius: 7px; color: var(--ink); background: var(--paper); outline: 0; }
+		.auth-fields input:focus { border-color: var(--green); }
+		.auth-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+		.auth-switch, .auth-close { padding: 7px; border: 0; color: var(--green); background: transparent; font-size: .78rem; }
+		.auth-error { min-height: 1.2em; color: #b34f3d; font-size: .78rem; }
+
+		.right-panel { margin-top: 38px; }
+		.right-panel h2 { margin-bottom: 17px; font-size: 1.45rem; }
+		.person-list { display: grid; gap: 15px; }
+		.person-list .person { justify-content: space-between; }
+		.person-list .person > div { display: flex; align-items: center; gap: 9px; }
+		.person-list .avatar { width: 32px; height: 32px; font-size: 0.75rem; }
+		.follow { padding: 5px 8px; border: 1px solid var(--green); border-radius: 5px; color: var(--green); background: transparent; font-size: 0.7rem; font-weight: 700; }
+		.follow:hover { color: white; background: var(--green); }
+		.right-footer { margin-top: 22px; color: var(--muted); font-size: 0.72rem; line-height: 2; }
+		.right-footer a { margin-right: 9px; }
+
+		.profile-header { display: flex; gap: 32px; align-items: center; padding: 24px 20px 16px; }
+		.profile-avatar { width: 150px; height: 150px; font-size: 2.6rem; border-radius: 50%; }
+		.profile-info { flex: 1; }
+		.profile-title { font-size: 1.6rem; margin: 0 0 12px; }
+		.profile-stats { display: flex; gap: 28px; margin-bottom: 12px; }
+		.profile-stat { display: flex; gap: 4px; align-items: baseline; font-size: 0.88rem; }
+		.profile-stat strong { font-weight: 700; }
+		.profile-stat span { color: var(--muted); }
+		.profile-name { margin: 0 0 4px; font-weight: 700; color: var(--ink); font-size: 0.92rem; }
+		.profile-meta { margin: 0 0 14px; color: var(--muted); font-size: 0.84rem; }
+		.profile-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+		.profile-tabs { display: flex; justify-content: center; gap: 0; border-top: 1px solid var(--line); margin-bottom: 2px; }
+		.profile-tab { flex: 1; padding: 14px; border: 0; background: transparent; color: var(--muted); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; border-bottom: 1px solid transparent; }
+		.profile-tab.active { color: var(--ink); border-bottom-color: var(--ink); }
+		.profile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+		.profile-grid .post { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; cursor: pointer; }
+		.profile-grid .post-image { aspect-ratio: 1 / 1; min-height: 0; border-radius: 0; margin: 0; font-size: 1rem; }
+		.profile-grid .post-header, .profile-grid .post-meta, .profile-grid .post-actions, .profile-grid .comment-box, .profile-grid .post-copy { display: none; }
+		.profile-grid .post-image img, .profile-grid .post-image video { height: 100%; object-fit: cover; }
+
+		@media (max-width: 1020px) {
+			main { grid-template-columns: 190px minmax(0, 600px); justify-content: center; }
+			main > aside:last-child { display: none; }
+		}
+		@media (max-width: 700px) {
+			.shell { width: min(100% - 28px, 600px); }
+			nav { min-height: 64px; }
+			.search { order: 3; width: 100%; }
+			nav { flex-wrap: wrap; }
+			.nav-actions { margin-left: auto; }
+			main { display: block; padding-top: 24px; }
+			main > aside:first-child { display: none; }
+			.feed-heading { display: block; }
+			.feed-heading p { margin-top: 7px; }
+		}
+		@media (max-width: 440px) {
+			.nav-actions .icon-button { display: none; }
+			.composer, .post { padding: 15px; }
+			.composer-bottom { align-items: flex-end; flex-direction: column; }
+			.composer-tools { width: 100%; justify-content: space-between; }
+			.composer-bottom .button { width: 100%; }
+			.composer-options { grid-template-columns: 1fr; }
+			.post-image { min-height: 175px; }
+		}
+	</style>
+</head>
+<body>
+	<header>
+		<div class="shell">
+			<nav aria-label="Main navigation">
+				<a class="brand" href="#home" aria-label="Dairy home"><span class="brand-mark">d</span><span>Dairy</span></a>
+				<label class="search" for="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Search stories"></label>
+				<div class="nav-actions">
+					<button class="icon-button" type="button" aria-label="Messages">✉</button>
+					<button class="icon-button" type="button" aria-label="Notifications">♡</button>
+					<button class="button auth-button" id="auth-button" type="button">Sign in</button>
+					<a class="avatar" href="#profile" aria-label="Open your profile">AM</a>
+				</div>
+			</nav>
+		</div>
+	</header>
+
+	<main class="shell" id="home">
+		<aside aria-label="Sidebar navigation">
+			<nav class="side-menu">
+				<a class="active" href="#feed"><span class="side-icon">⌂</span> Home feed</a>
+				<a href="#my-dairy"><span class="side-icon">▤</span> My dairy</a>
+				<a href="#discover"><span class="side-icon">✦</span> Discover</a>
+				<a href="#saved"><span class="side-icon">♡</span> Saved stories</a>
+				<a href="#inbox"><span class="side-icon">✉</span> Inbox</a>
+				<a href="#profile"><span class="side-icon">☺</span> My profile</a>
+				<a href="#settings"><span class="side-icon">⚙</span> Settings</a>
+			</nav>
+			<div class="side-note"><strong>Your story matters.</strong> Share a moment, find a kindred thought, and make today part of something bigger.</div>
+		</aside>
+
+		<section id="feed" class="view active" aria-labelledby="feed-title">
+			<div class="feed-heading">
+				<div><span class="eyebrow">Your community</span><h1 id="feed-title">The daily feed</h1></div>
+				<p>Tuesday, September 5</p>
+			</div>
+
+			<form class="composer" action="/api/stories" method="post">
+				<div class="composer-top">
+					<span class="avatar" aria-hidden="true">AM</span>
+					<label for="story" hidden>Share your story</label>
+					<textarea id="story" name="story" placeholder="What is on your mind today?"></textarea>
+				</div>
+				<div class="composer-options" id="composer-options">
+					<input id="photo-url" type="url" placeholder="Photo URL (optional)">
+					<div class="media-picker"><label for="media-files">Photos or videos</label><input id="media-files" type="file" accept="image/*,video/*" multiple></div>
+					<div class="media-preview" id="media-preview" aria-live="polite"></div>
+					<input id="feeling" type="text" maxlength="40" placeholder="Feeling (optional)">
+					<input id="place" type="text" maxlength="80" placeholder="Place (optional)">
+					<select id="audience" aria-label="Story audience"><option value="Public">Public</option><option value="Friends">Friends</option><option value="Only me">Only me</option></select>
+				</div>
+				<div class="composer-bottom">
+					<div class="composer-tools">
+						<button class="tool composer-toggle" type="button">▣ Add details</button>
+					</div>
+					<button class="button" type="submit">Share story</button>
+				</div>
+			</form>
+
+			<div class="stories" aria-label="Stories from your community">
+				<div class="story" id="your-story" role="button" tabindex="0" aria-label="Add your story"><div class="story-ring mine"><div class="story-avatar"><span class="story-add">+</span></div></div><span class="story-name">Your story</span></div>
+				<div class="stories-list" id="stories-list"></div>
+			</div>
+
+			<div id="feed-list"></div>
+		</section>
+
+		<section id="my-dairy" class="view" aria-labelledby="my-dairy-title"><div class="view-intro"><span class="eyebrow">Your archive</span><h1 id="my-dairy-title">My dairy</h1><p>Everything you have shared, in one quiet place.</p></div><div id="my-dairy-list"></div></section>
+		<section id="discover" class="view" aria-labelledby="discover-title"><div class="view-intro"><span class="eyebrow">Find something new</span><h1 id="discover-title">Discover</h1><p>Browse stories from the Dairy community.</p></div><label class="view-search" for="discover-search"><span aria-hidden="true">⌕</span><input id="discover-search" type="search" placeholder="Search posts, people, places..." autocomplete="off"></label><div id="discover-list"></div></section>
+		<section id="saved" class="view" aria-labelledby="saved-title"><div class="view-intro"><span class="eyebrow">Keep close</span><h1 id="saved-title">Saved stories</h1><p>Stories you want to return to.</p></div><div id="saved-list"></div></section>
+		<section id="inbox" class="view" aria-labelledby="inbox-title">
+			<div class="inbox">
+				<div class="inbox-sidebar">
+					<div class="inbox-heading"><span class="eyebrow">Messages</span><h1 id="inbox-title">Inbox</h1></div>
+					<button class="button inbox-new" type="button">+ New message</button>
+					<div class="conversation-list" id="conversation-list"></div>
+				</div>
+				<div class="inbox-chat">
+					<div class="inbox-placeholder" id="inbox-placeholder">Select a conversation or start a new one.</div>
+					<div class="inbox-messages" id="inbox-messages" hidden></div>
+					<form class="inbox-composer" id="inbox-composer" hidden>
+						<input id="inbox-input" type="text" maxlength="2000" placeholder="Write a message..." autocomplete="off">
+						<button class="button" type="submit">Send</button>
+					</form>
+				</div>
+			</div>
+		</section>
+		<section id="settings" class="view" aria-labelledby="settings-title"><div class="view-intro"><span class="eyebrow">Make Dairy yours</span><h1 id="settings-title">Settings</h1><p>Control your profile and notification preferences.</p></div><form class="settings-form" id="settings-form"><div class="form-row"><label class="field">Display name<input id="setting-name" required maxlength="60"></label><label class="field">Email<input id="setting-email" type="email" readonly></label></div><label class="field">Profile picture<input id="setting-avatar" type="file" accept="image/*"></label><label class="field">Default audience<select id="setting-audience"><option>Public</option><option>Friends</option><option>Only me</option></select></label><label class="check-row"><input id="setting-notifications" type="checkbox"> Email me about replies to my stories</label><div class="settings-actions"><button class="danger-button" id="settings-signout" type="button">Sign out</button><button class="button" type="submit">Save settings</button></div></form></section>
+		<section id="profile" class="view" aria-labelledby="profile-title">
+			<div class="profile-header">
+				<span class="avatar profile-avatar" id="profile-avatar">AM</span>
+				<div class="profile-info">
+					<h1 id="profile-title">Your profile</h1>
+					<div class="profile-stats">
+						<div class="profile-stat"><strong id="profile-stories">0</strong><span>stories</span></div>
+						<div class="profile-stat"><strong id="profile-likes">0</strong><span>likes</span></div>
+						<div class="profile-stat"><strong id="profile-joined">-</strong><span>joined</span></div>
+					</div>
+					<p id="profile-name" class="profile-name">Sign in to view your profile</p>
+					<p id="profile-email" class="profile-meta"></p>
+					<div class="profile-actions">
+						<button class="button" type="button">Edit profile</button>
+						<button class="button" type="button">Share profile</button>
+					</div>
+				</div>
+			</div>
+			<div class="profile-tabs" role="tablist">
+				<button class="profile-tab active" data-tab="posts" role="tab" aria-selected="true">POSTS</button>
+				<button class="profile-tab" data-tab="saved" role="tab" aria-selected="false">SAVED</button>
+				<button class="profile-tab" data-tab="tagged" role="tab" aria-selected="false">TAGGED</button>
+			</div>
+			<div class="profile-grid" id="profile-grid"></div>
+		</section>
+
+		<aside aria-label="Community panel">
+			<section class="right-panel">
+				<h2>People to follow</h2>
+				<div class="person-list" id="suggestions-list"></div>
+			</section>
+			<div class="right-footer"><a href="#about">About</a><a href="#privacy">Privacy</a><a href="#help">Help</a><br>&copy; 2026 Dairy</div>
+		</aside>
+	</main>
+	<div class="story-viewer" id="story-viewer" role="dialog" aria-modal="true" aria-label="Story viewer">
+		<div class="story-progress" id="story-progress"></div>
+		<div class="story-media" id="story-media"></div>
+		<div class="story-text" id="story-text"></div>
+		<button class="story-close" id="story-close" type="button" aria-label="Close story">✕</button>
+	</div>
+	<div class="story-modal" id="story-modal" role="dialog" aria-modal="true" aria-labelledby="story-modal-title">
+		<div class="story-modal-card">
+			<h2 id="story-modal-title">New story</h2>
+			<input id="story-file" type="file" accept="image/*,video/*">
+			<textarea id="story-text-input" maxlength="500" placeholder="Add a caption..."></textarea>
+			<div class="story-modal-actions">
+				<button class="button" id="story-cancel" type="button">Cancel</button>
+				<button class="button" id="story-share" type="button">Share story</button>
+			</div>
+		</div>
+	</div>
+		<form class="auth-card" id="auth-form">
+			<button class="auth-close" id="auth-close" type="button">Close</button>
+			<h2 id="auth-title">Sign in to Dairy</h2>
+			<p id="auth-copy">Use your account to share and see protected stories.</p>
+			<div class="auth-fields">
+				<input id="auth-name" type="text" minlength="2" maxlength="80" placeholder="Display name" autocomplete="name" hidden>
+				<input id="auth-email" type="email" required placeholder="Email address" autocomplete="email">
+				<input id="auth-password" type="password" minlength="8" required placeholder="Password" autocomplete="current-password">
+			</div>
+			<div class="auth-error" id="auth-error" role="alert"></div>
+			<div class="auth-actions"><button class="auth-switch" id="auth-switch" type="button">Create an account</button><button class="button" id="auth-submit" type="submit">Sign in</button></div>
+		</form>
+	</div>
+	<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+	<script src="/app.js" defer></script>
+</body>
+</html>
