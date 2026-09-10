@@ -118,7 +118,7 @@ function renderStory(story, target = feedList) {
       </div>
       ${isAuthor ? `<button class="post-delete" type="button">Delete</button>` : ""}
     </div>
-    <p class="post-copy">${escapeHtml(story.text)}</p>${photo}
+    <p class="post-copy" data-story-id="${escapeAttr(story.id)}">${escapeHtml(story.text)}</p>${photo}
     <div class="post-meta"><span>♡ ${likes} people like this</span><span>${comments} comments</span></div>
     <div class="post-actions"><button class="post-action like-story" type="button">♡ Like</button><button class="post-action comment-story" type="button">◯ Comment</button><button class="post-action save-story ${saved ? "active" : ""}" type="button">${saved ? "♥ Saved" : "♡ Save"}</button><button class="post-action share-story" type="button">↗ Share</button></div><div class="comment-box" hidden><form><input maxlength="1000" placeholder="Write a kind reply..."><button class="button" type="submit">Reply</button></form></div>`;
   if (story.photo) {
@@ -148,7 +148,7 @@ function renderStory(story, target = feedList) {
       button.disabled = false;
     }
   });
-  post.querySelector(".comment-story").addEventListener("click", () => { post.querySelector(".comment-box").hidden = !post.querySelector(".comment-box").hidden; });
+  post.querySelector(".comment-story").addEventListener("click", () => openCommentsPanel(story, post));
   post.querySelector(".save-story").addEventListener("click", () => toggleSaved(story, post));
   post.querySelector(".share-story").addEventListener("click", async () => { try { await navigator.clipboard.writeText(`${location.origin}/#${story.id}`); showToast("Story link copied"); } catch { showToast("Story ready to share"); } });
   post.querySelector(".post-delete")?.addEventListener("click", async () => {
@@ -193,6 +193,52 @@ function renderStory(story, target = feedList) {
   });
   target.append(post);
 }
+let currentCommentsStoryId = null;
+async function openCommentsPanel(story, post) {
+  currentCommentsStoryId = story.id;
+  const panel = document.querySelector("#comments-panel");
+  const list = document.querySelector("#comments-list");
+  panel.classList.add("open");
+  list.replaceChildren();
+  list.innerHTML = '<div class="empty-state">Loading comments...</div>';
+  try {
+    const { data: comments, error } = await supabaseClient.from("comments").select("id, body, created_at, author_id, profiles:profiles!comments_author_id_fkey(display_name)").eq("post_id", story.id).order("created_at", { ascending: true });
+    if (error) throw error;
+    list.replaceChildren();
+    if (!comments?.length) { list.innerHTML = '<div class="empty-state">No comments yet. Be the first to reply.</div>'; return; }
+    for (const comment of comments) {
+      const item = document.createElement("div");
+      item.className = "comment-item";
+      const name = comment.profiles?.display_name || "Unknown";
+      item.innerHTML = `<strong>${escapeHtml(name)}</strong><p>${escapeHtml(comment.body)}</p><time>${formatDate(comment.created_at)}</time>`;
+      list.append(item);
+    }
+  } catch (error) {
+    list.innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+  }
+}
+async function addComment(storyId, body) {
+  if (!currentUser || !supabaseClient) return openAuth();
+  const text = body.trim();
+  if (!text) return;
+  const { error } = await supabaseClient.from("comments").insert({ post_id: storyId, author_id: currentUser.id, body: text });
+  if (error) { showToast(error.message); return; }
+  showToast("Reply added");
+  const post = [...document.querySelectorAll(".post")].find((el) => el.querySelector(".post-copy")?.dataset?.storyId === String(storyId));
+  const story = state.stories.find((s) => String(s.id) === String(storyId));
+  if (story) { story.comments = (Number(story.comments) || 0) + 1; }
+  if (post) { post.querySelector(".post-meta span:last-child").textContent = `${story?.comments || 1} comments`; }
+  const panel = document.querySelector("#comments-panel");
+  const originalStoryId = currentCommentsStoryId;
+  if (panel.classList.contains("open") && originalStoryId === storyId) openCommentsPanel({ id: storyId }, post);
+}
+document.querySelector("#comments-close")?.addEventListener("click", () => document.querySelector("#comments-panel").classList.remove("open"));
+document.querySelector("#comments-composer")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const input = document.querySelector("#comment-input");
+  await addComment(currentCommentsStoryId, input.value);
+  input.value = "";
+});
 
 function toggleSaved(story, post) {
   state.saved = state.saved.includes(story.id) ? state.saved.filter((id) => id !== story.id) : [...state.saved, story.id];
@@ -205,33 +251,20 @@ function toggleSaved(story, post) {
   showToast(active ? "Saved for later" : "Removed from saved");
 }
 let currentConversationId = null;
-async function loadConversations() {
-  const list = document.querySelector("#conversation-list");
+async function loadUsers() {
+  const list = document.querySelector("#user-list");
   if (!list || !currentUser || !supabaseClient) { list.replaceChildren(); return; }
-  const { data: participants, error } = await supabaseClient.from("conversation_participants").select("conversation_id, last_read_at, conversation:conversations(id, updated_at)").eq("user_id", currentUser.id).order("conversation_id");
-  if (error || !participants?.length) { list.replaceChildren(); return; }
-  const conversationIds = participants.map((p) => p.conversation_id);
-  const { data: messages } = await supabaseClient.from("messages").select("conversation_id, sender_id, body, created_at").in("conversation_id", conversationIds).order("created_at", { ascending: false });
-  const lastByConversation = new Map();
-  for (const message of messages || []) {
-    if (!lastByConversation.has(message.conversation_id)) lastByConversation.set(message.conversation_id, message);
-  }
-  const { data: profileRows } = await supabaseClient.from("profiles").select("id, display_name, avatar_url").in("id", [...new Set((messages || []).map((m) => m.sender_id).filter((id) => id !== currentUser.id))]);
-  const profileMap = new Map((profileRows || []).map((p) => [p.id, p]));
+  const { data: profiles, error } = await supabaseClient.from("profiles").select("id, display_name, avatar_url, bio").neq("id", currentUser.id).order("display_name");
+  if (error || !profiles?.length) { list.replaceChildren(); list.innerHTML = '<div class="empty-state">No users found.</div>'; return; }
   list.replaceChildren();
-  for (const participant of participants) {
-    const conversation = participant.conversation;
-    const lastMessage = lastByConversation.get(participant.conversation_id);
-    const otherSenderId = lastMessage?.sender_id === currentUser.id ? (await loadOtherParticipant(participant.conversation_id)) : lastMessage?.sender_id;
-    const otherProfile = otherSenderId ? profileMap.get(otherSenderId) : null;
-    const name = otherProfile?.display_name || "Conversation";
+  for (const profile of profiles) {
     const item = document.createElement("button");
     item.className = "conversation-item";
     item.type = "button";
-    const initials = (name || "?").slice(0, 2).toUpperCase();
-    const avatarHtml = otherProfile?.avatar_url ? `<img src="${escapeAttr(otherProfile.avatar_url)}" alt="">` : initials;
-    item.innerHTML = `<span class="avatar" style="width:36px;height:36px;font-size:.8rem;${otherProfile?.avatar_url ? "background:transparent;" : ""}">${avatarHtml}</span><div class="conversation-meta"><strong>${escapeHtml(name)}</strong><span>${escapeHtml(lastMessage?.body || "Start chatting")}</span></div>`;
-    item.addEventListener("click", () => openConversation(participant.conversation_id, name));
+    const initials = (profile.display_name || "?").slice(0, 2).toUpperCase();
+    const avatarHtml = profile.avatar_url ? `<img src="${escapeAttr(profile.avatar_url)}" alt="">` : initials;
+    item.innerHTML = `<span class="avatar" style="width:36px;height:36px;font-size:.8rem;${profile.avatar_url ? "background:transparent;" : ""}">${avatarHtml}</span><div class="conversation-meta"><strong>${escapeHtml(profile.display_name)}</strong><span>${escapeHtml(profile.bio || "No bio")}</span></div>`;
+    item.addEventListener("click", () => startConversation(profile.id));
     list.append(item);
   }
 }
@@ -275,7 +308,7 @@ async function sendMessage(body) {
   await supabaseClient.from("conversation_participants").update({ last_read_at: new Date().toISOString() }).eq("conversation_id", currentConversationId).eq("user_id", currentUser.id);
   await supabaseClient.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", currentConversationId);
   await loadMessages(currentConversationId);
-  loadConversations();
+  loadUsers();
 }
 async function startConversation(userId) {
   if (!currentUser || !supabaseClient) return openAuth();
@@ -388,6 +421,7 @@ function renderProfile() {
   const storiesEl = document.querySelector("#profile-stories");
   const likesEl = document.querySelector("#profile-likes");
   const joinedEl = document.querySelector("#profile-joined");
+  const bioEl = document.querySelector("#profile-bio");
   const gridEl = document.querySelector("#profile-grid");
   if (!nameEl) return;
   if (!currentUser) {
@@ -397,6 +431,7 @@ function renderProfile() {
     storiesEl.textContent = "0";
     likesEl.textContent = "0";
     joinedEl.textContent = "-";
+    if (bioEl) bioEl.textContent = "";
     gridEl.replaceChildren();
     gridEl.innerHTML = '<div class="empty-state">Sign in to see your stories.</div>';
     return;
@@ -408,6 +443,7 @@ function renderProfile() {
   avatarEl.innerHTML = avatarUrl ? `<img src="${escapeAttr(avatarUrl)}" alt="">` : initials;
   nameEl.textContent = currentUser.user_metadata?.display_name || currentUser.email || "You";
   emailEl.textContent = currentUser.email || "";
+  if (bioEl) bioEl.textContent = profileData.bio || "";
   const myStories = state.stories.filter((story) => story.author?.id === currentUser.id);
   storiesEl.textContent = myStories.length;
   likesEl.textContent = myStories.reduce((sum, story) => sum + (Number(story.likes) || 0), 0);
@@ -441,7 +477,7 @@ function renderViews() {
   renderCollection("saved-list", state.stories.filter((story) => state.saved.includes(story.id)));
   renderCollection("discover-list", discoverStories);
 }
-function navigate() { const requestedHash = location.hash.replace("#", "") || "feed"; const hash = document.querySelector(`#${CSS.escape(requestedHash)}.view`) ? requestedHash : "feed"; document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === hash)); document.querySelectorAll(".side-menu a").forEach((link) => link.classList.toggle("active", link.getAttribute("href") === `#${hash}`)); if (hash === "my-dairy" || hash === "saved" || hash === "discover" || hash === "profile") renderViews(); if (hash === "profile") renderProfile(); if (hash === "inbox") loadConversations(); if (hash === "feed") loadStoriesRow(); }
+function navigate() { const requestedHash = location.hash.replace("#", "") || "feed"; const hash = document.querySelector(`#${CSS.escape(requestedHash)}.view`) ? requestedHash : "feed"; document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === hash)); document.querySelectorAll(".side-menu a").forEach((link) => link.classList.toggle("active", link.getAttribute("href") === `#${hash}`)); if (hash === "my-dairy" || hash === "saved" || hash === "discover" || hash === "profile") renderViews(); if (hash === "profile") renderProfile(); if (hash === "inbox") loadUsers(); if (hash === "feed") loadStoriesRow(); }
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>'"]/g, (character) => ({
@@ -546,19 +582,28 @@ document.addEventListener("click", (event) => {
   localStorage.setItem("dairy-follows", JSON.stringify(state.follows));
   button.textContent = state.follows.includes(name) ? "Following" : "Follow";
 });
-document.querySelector(".inbox-new")?.addEventListener("click", async () => {
-  if (!currentUser) return openAuth();
-  const email = prompt("Enter the email or username of the person you want to message:");
-  if (!email) return;
-  const { data: profiles, error } = await supabaseClient.from("profiles").select("id, display_name, username").or(`email.ilike.${email},username.ilike.${email},display_name.ilike.${email}`).limit(1);
-  if (error || !profiles?.length) { showToast("User not found"); return; }
-  await startConversation(profiles[0].id);
+document.querySelector("#inbox-search")?.addEventListener("input", async (event) => {
+  const query = event.target.value.toLowerCase().trim();
+  const items = document.querySelectorAll("#user-list .conversation-item");
+  items.forEach((item) => {
+    const text = item.textContent.toLowerCase();
+    item.hidden = Boolean(query && !text.includes(query));
+  });
 });
 document.querySelector("#inbox-composer")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const input = document.querySelector("#inbox-input");
   await sendMessage(input.value);
   input.value = "";
+});
+document.querySelectorAll(".profile-actions .button").forEach((button) => {
+  button.addEventListener("click", () => {
+    if (button.textContent.trim().toLowerCase() === "edit profile") {
+      location.hash = "settings";
+    } else if (button.textContent.trim().toLowerCase() === "share profile") {
+      navigator.clipboard.writeText(location.href).then(() => showToast("Profile link copied")).catch(() => showToast("Profile ready to share"));
+    }
+  });
 });
 async function uploadAvatar(file) {
   if (!file || !currentUser) return;
@@ -578,6 +623,7 @@ async function uploadAvatar(file) {
 document.querySelector("#setting-name").value = state.settings.name;
 document.querySelector("#setting-audience").value = state.settings.audience;
 document.querySelector("#setting-notifications").checked = state.settings.notifications;
+document.querySelector("#setting-bio").value = state.settings.bio || "";
 document.querySelector("#settings-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const fileInput = document.querySelector("#setting-avatar");
@@ -588,13 +634,17 @@ document.querySelector("#settings-form")?.addEventListener("submit", async (even
       await uploadAvatar(fileInput.files[0]);
       showToast("Profile picture updated");
     }
-    state.settings = { name: document.querySelector("#setting-name").value.trim() || "You", audience: document.querySelector("#setting-audience").value, notifications: document.querySelector("#setting-notifications").checked };
+    const bio = document.querySelector("#setting-bio").value.trim();
+    const updates = { display_name: document.querySelector("#setting-name").value.trim() || "You", bio: bio || "" };
+    const { error: profileError } = await supabaseClient.from("profiles").update(updates).eq("id", currentUser.id);
+    if (profileError) throw profileError;
+    state.settings = { name: updates.display_name, audience: document.querySelector("#setting-audience").value, notifications: document.querySelector("#setting-notifications").checked, bio: updates.bio };
     localStorage.setItem("dairy-settings", JSON.stringify(state.settings));
     showToast("Settings saved");
     renderViews();
     renderProfile();
   } catch (error) {
-    showToast(error.message || "Could not update profile picture");
+    showToast(error.message || "Could not update profile");
   } finally {
     button.disabled = false;
   }
@@ -656,11 +706,11 @@ supabaseClient?.auth.getSession().then(({ data }) => {
   updateAuthUi();
   loadStories().catch((error) => { feedList.innerHTML = `<div class="empty-state">${escapeHtml(currentUser ? error.message : "Sign in to load the community feed")}</div>`; });
   loadSuggestions();
-  loadConversations();
+  loadUsers();
   loadStoriesRow();
   supabaseClient.channel("inbox").on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
     if (payload.new.conversation_id === currentConversationId) loadMessages(currentConversationId);
-    loadConversations();
+    loadUsers();
   }).subscribe();
 });
 supabaseClient?.auth.onAuthStateChange((_event, session) => {
@@ -668,7 +718,7 @@ supabaseClient?.auth.onAuthStateChange((_event, session) => {
   updateAuthUi();
   loadStories().catch(() => {});
   loadSuggestions();
-  loadConversations();
+  loadUsers();
   loadStoriesRow();
 });
 document.querySelector("#your-story")?.addEventListener("click", () => {

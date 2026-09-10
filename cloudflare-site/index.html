@@ -142,11 +142,12 @@
 		.profile-stat { display: grid; gap: 2px; text-align: center; }
 		.profile-stat strong { font-size: 1.05rem; color: var(--ink); }
 		.profile-stat span { color: var(--muted); font-size: .72rem; }
+		.profile-bio { margin: 0; color: var(--muted); font-size: .88rem; }
 		.inbox { display: grid; grid-template-columns: 280px 1fr; border: 1px solid var(--line); border-radius: 12px; background: var(--card); box-shadow: var(--shadow); overflow: hidden; min-height: 520px; }
 		.inbox-sidebar { border-right: 1px solid var(--line); padding: 18px; display: flex; flex-direction: column; gap: 14px; }
 		.inbox-heading { margin: 0; }
 		.inbox-heading h1 { font-size: 1.35rem; margin: 4px 0 0; }
-		.inbox-new { width: 100%; }
+		.inbox-search { width: 100%; margin-bottom: 10px; }
 		.conversation-list { display: grid; gap: 6px; overflow: auto; }
 		.conversation-item { display: flex; gap: 10px; align-items: center; padding: 10px; border-radius: 10px; border: 1px solid transparent; background: transparent; color: inherit; font: inherit; text-align: left; }
 		.conversation-item:hover, .conversation-item.active { background: var(--paper); border-color: var(--line); }
@@ -318,11 +319,11 @@
 			<div class="inbox">
 				<div class="inbox-sidebar">
 					<div class="inbox-heading"><span class="eyebrow">Messages</span><h1 id="inbox-title">Inbox</h1></div>
-					<button class="button inbox-new" type="button">+ New message</button>
-					<div class="conversation-list" id="conversation-list"></div>
+					<label class="view-search" for="inbox-search"><span aria-hidden="true">⌕</span><input id="inbox-search" type="search" placeholder="Search people..." autocomplete="off"></label>
+					<div class="conversation-list" id="user-list"></div>
 				</div>
 				<div class="inbox-chat">
-					<div class="inbox-placeholder" id="inbox-placeholder">Select a conversation or start a new one.</div>
+					<div class="inbox-placeholder" id="inbox-placeholder">Select a user to start chatting.</div>
 					<div class="inbox-messages" id="inbox-messages" hidden></div>
 					<form class="inbox-composer" id="inbox-composer" hidden>
 						<input id="inbox-input" type="text" maxlength="2000" placeholder="Write a message..." autocomplete="off">
@@ -331,32 +332,28 @@
 				</div>
 			</div>
 		</section>
-		<section id="settings" class="view" aria-labelledby="settings-title"><div class="view-intro"><span class="eyebrow">Make Dairy yours</span><h1 id="settings-title">Settings</h1><p>Control your profile and notification preferences.</p></div><form class="settings-form" id="settings-form"><div class="form-row"><label class="field">Display name<input id="setting-name" required maxlength="60"></label><label class="field">Email<input id="setting-email" type="email" readonly></label></div><label class="field">Profile picture<input id="setting-avatar" type="file" accept="image/*"></label><label class="field">Default audience<select id="setting-audience"><option>Public</option><option>Friends</option><option>Only me</option></select></label><label class="check-row"><input id="setting-notifications" type="checkbox"> Email me about replies to my stories</label><div class="settings-actions"><button class="danger-button" id="settings-signout" type="button">Sign out</button><button class="button" type="submit">Save settings</button></div></form></section>
+		<section id="settings" class="view" aria-labelledby="settings-title"><div class="view-intro"><span class="eyebrow">Make Dairy yours</span><h1 id="settings-title">Settings</h1><p>Control your profile and notification preferences.</p></div><form class="settings-form" id="settings-form"><div class="form-row"><label class="field">Display name<input id="setting-name" required maxlength="60"></label><label class="field">Email<input id="setting-email" type="email" readonly></label></div><label class="field">Bio<textarea id="setting-bio" maxlength="500" rows="3"></textarea></label><label class="field">Profile picture<input id="setting-avatar" type="file" accept="image/*"></label><label class="field">Default audience<select id="setting-audience"><option>Public</option><option>Friends</option><option>Only me</option></select></label><label class="check-row"><input id="setting-notifications" type="checkbox"> Email me about replies to my stories</label><div class="settings-actions"><button class="danger-button" id="settings-signout" type="button">Sign out</button><button class="button" type="submit">Save settings</button></div></form></section>
 		<section id="profile" class="view" aria-labelledby="profile-title">
 			<div class="profile-header">
 				<span class="avatar profile-avatar" id="profile-avatar">AM</span>
 				<div class="profile-info">
 					<h1 id="profile-title">Your profile</h1>
-					<div class="profile-stats">
-						<div class="profile-stat"><strong id="profile-stories">0</strong><span>stories</span></div>
-						<div class="profile-stat"><strong id="profile-likes">0</strong><span>likes</span></div>
-						<div class="profile-stat"><strong id="profile-joined">-</strong><span>joined</span></div>
-					</div>
-					<p id="profile-name" class="profile-name">Sign in to view your profile</p>
-					<p id="profile-email" class="profile-meta"></p>
-					<div class="profile-actions">
-						<button class="button" type="button">Edit profile</button>
-						<button class="button" type="button">Share profile</button>
-					</div>
+				<div class="profile-stats">
+					<div class="profile-stat"><strong id="profile-stories">0</strong><span>stories</span></div>
+					<div class="profile-stat"><strong id="profile-likes">0</strong><span>likes</span></div>
+					<div class="profile-stat"><strong id="profile-joined">-</strong><span>joined</span></div>
+				</div>
+				<p id="profile-name" class="profile-name">Sign in to view your profile</p>
+				<p id="profile-email" class="profile-meta"></p>
+				<p id="profile-bio" class="profile-bio"></p>
+				<div class="profile-actions">
+					<button class="button" type="button">Edit profile</button>
+					<button class="button" type="button">Share profile</button>
 				</div>
 			</div>
-			<div class="profile-tabs" role="tablist">
-				<button class="profile-tab active" data-tab="posts" role="tab" aria-selected="true">POSTS</button>
-				<button class="profile-tab" data-tab="saved" role="tab" aria-selected="false">SAVED</button>
-				<button class="profile-tab" data-tab="tagged" role="tab" aria-selected="false">TAGGED</button>
-			</div>
-			<div class="profile-grid" id="profile-grid"></div>
-		</section>
+		</div>
+		<div class="profile-grid" id="profile-grid"></div>
+	</section>
 
 		<aside aria-label="Community panel">
 			<section class="right-panel">
@@ -382,6 +379,17 @@
 				<button class="button" id="story-share" type="button">Share story</button>
 			</div>
 		</div>
+	</div>
+	<div class="comments-panel" id="comments-panel">
+		<div class="comments-header">
+			<h3>Comments</h3>
+			<button class="comments-close" id="comments-close" type="button">✕</button>
+		</div>
+		<div class="comments-list" id="comments-list"></div>
+		<form class="comments-composer" id="comments-composer">
+			<input id="comment-input" type="text" maxlength="2000" placeholder="Write a comment..." autocomplete="off">
+			<button class="button" type="submit">Reply</button>
+		</form>
 	</div>
 	<div class="auth-panel" id="auth-panel" role="dialog" aria-modal="true" aria-labelledby="auth-title">
 		<form class="auth-card" id="auth-form">
