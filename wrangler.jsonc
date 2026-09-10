@@ -1,11 +1,5 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "dairy-social-backend",
-  "compatibility_date": "2026-09-07",
-  "observability": {
-    "enabled": true
-  },
-  "assets": {
-    "directory": "."
-  }
+  "name": "dairy",
+  "pages_build_output_dir": "cloudflare-site",
+  "compatibility_date": "2026-09-10"
 }
