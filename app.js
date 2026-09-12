@@ -183,11 +183,15 @@ function renderStory(story, target = feedList) {
 let currentCommentsStoryId = null;
 async function openCommentsPanel(storyId) {
   currentCommentsStoryId = storyId;
-  const panel = document.querySelector("#comments-panel");
-  const list = document.querySelector("#comments-list");
-  panel.classList.add("open");
-  list.replaceChildren();
-  list.innerHTML = '<div class="empty-state">Loading comments...</div>';
+  const post = [...document.querySelectorAll(".post")].find((el) => el.querySelector(".post-copy")?.dataset?.storyId === String(storyId));
+  if (!post) return;
+  const existing = post.querySelector(".comments-section");
+  if (existing) { existing.hidden = false; existing.scrollIntoView({ behavior: "smooth", block: "nearest" }); return; }
+  const section = document.createElement("div");
+  section.className = "comments-section";
+  section.innerHTML = '<h4>Comments</h4><div class="comments-list"><div class="empty-state">Loading...</div></div><form class="comment-composer"><input type="text" maxlength="2000" placeholder="Add a comment..." autocomplete="off"><button class="button" type="submit">Post</button></form>';
+  post.after(section);
+  section.scrollIntoView({ behavior: "smooth", block: "nearest" });
   try {
     const { data: comments, error } = await supabaseClient.from("comments").select("id, body, created_at, author_id").eq("post_id", storyId).order("created_at", { ascending: true });
     if (error) throw error;
@@ -197,18 +201,28 @@ async function openCommentsPanel(storyId) {
       const { data: profiles } = await supabaseClient.from("profiles").select("id, display_name").in("id", authorIds);
       for (const p of profiles || []) authors.set(p.id, p.display_name);
     }
+    const list = section.querySelector(".comments-list");
     list.replaceChildren();
-    if (!comments?.length) { list.innerHTML = '<div class="empty-state">No comments yet. Be the first to reply.</div>'; return; }
+    if (!comments?.length) { list.innerHTML = '<div class="empty-state">No comments yet. Be the first.</div>'; return; }
     for (const comment of comments) {
       const item = document.createElement("div");
       item.className = "comment-item";
       const name = authors.get(comment.author_id) || "Unknown";
-      item.innerHTML = `<strong>${escapeHtml(name)}</strong><p>${escapeHtml(comment.body)}</p><time>${formatDate(comment.created_at)}</time>`;
+      const initials = name.slice(0, 2).toUpperCase();
+      item.innerHTML = `<span class="comment-avatar">${initials}</span><div class="comment-body"><strong>${escapeHtml(name)}</strong><p>${escapeHtml(comment.body)}</p><time>${formatDate(comment.created_at)}</time></div>`;
       list.append(item);
     }
   } catch (error) {
-    list.innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+    section.querySelector(".comments-list").innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
   }
+  section.querySelector(".comment-composer").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const input = section.querySelector(".comment-composer input");
+    const text = input.value.trim();
+    if (!text) return;
+    await addComment(storyId, text);
+    input.value = "";
+  });
 }
 async function addComment(storyId, body) {
   if (!currentUser || !supabaseClient) return openAuth();
@@ -223,13 +237,6 @@ async function addComment(storyId, body) {
   if (post) { post.querySelector(".post-meta span:last-child").textContent = `${story?.comments || 1} comments`; }
   openCommentsPanel(storyId);
 }
-document.querySelector("#comments-close")?.addEventListener("click", () => document.querySelector("#comments-panel").classList.remove("open"));
-document.querySelector("#comments-composer")?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const input = document.querySelector("#comment-input");
-  await addComment(currentCommentsStoryId, input.value);
-  input.value = "";
-});
 
 let currentConversationId = null;
 async function loadUsers() {
