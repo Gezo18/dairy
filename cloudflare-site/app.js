@@ -474,10 +474,11 @@ function renderViews() {
   const query = document.querySelector("#discover-search")?.value.toLowerCase().trim() || "";
   const discoverStories = query ? state.stories.filter((story) => `${story.text} ${story.author?.name || ""} ${story.place || ""}`.toLowerCase().includes(query)) : state.stories;
   renderCollection("my-dairy-list", state.stories.filter((story) => (story.author?.id === currentUser?.id) || (story.author?.name || story.author) === state.settings.name));
+  renderCollection("following-list", state.stories.filter((story) => state.follows.includes(story.author?.name || story.author)));
   renderCollection("saved-list", state.stories.filter((story) => state.saved.includes(story.id)));
   renderCollection("discover-list", discoverStories);
 }
-function navigate() { const requestedHash = location.hash.replace("#", "") || "feed"; const hash = document.querySelector(`#${CSS.escape(requestedHash)}.view`) ? requestedHash : "feed"; document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === hash)); document.querySelectorAll(".side-menu a").forEach((link) => link.classList.toggle("active", link.getAttribute("href") === `#${hash}`)); if (hash === "my-dairy" || hash === "saved" || hash === "discover" || hash === "profile") renderViews(); if (hash === "profile") renderProfile(); if (hash === "inbox") loadUsers(); if (hash === "feed") loadStoriesRow(); }
+function navigate() { const requestedHash = location.hash.replace("#", "") || "feed"; const hash = document.querySelector(`#${CSS.escape(requestedHash)}.view`) ? requestedHash : "feed"; document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === hash)); document.querySelectorAll(".side-menu a").forEach((link) => link.classList.toggle("active", link.getAttribute("href") === `#${hash}`)); if (hash === "my-dairy" || hash === "saved" || hash === "discover" || hash === "profile" || hash === "following") renderViews(); if (hash === "profile") renderProfile(); if (hash === "inbox") loadUsers(); if (hash === "feed") loadStoriesRow(); }
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>'"]/g, (character) => ({
