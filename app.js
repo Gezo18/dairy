@@ -157,7 +157,7 @@ function renderStory(story, target = feedList) {
       button.disabled = false;
     }
   });
-  post.querySelector(".comment-story").addEventListener("click", () => openCommentsPanel(story, post));
+  post.querySelector(".comment-story").addEventListener("click", () => openCommentsPanel(story.id));
   post.querySelector(".save-story").addEventListener("click", () => toggleSaved(story, post));
   post.querySelector(".share-story").addEventListener("click", async () => { try { await navigator.clipboard.writeText(`${location.origin}/#${story.id}`); showToast("Story link copied"); } catch { showToast("Story ready to share"); } });
   post.querySelector(".post-delete")?.addEventListener("click", async () => {
@@ -178,47 +178,31 @@ function renderStory(story, target = feedList) {
       button.disabled = false;
     }
   });
-  post.querySelector(".comment-box form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const input = form.querySelector("input");
-    const button = form.querySelector("button");
-    const text = input.value.trim();
-    if (!text) return;
-    button.disabled = true;
-    try {
-      if (!currentUser) return openAuth();
-      const { error } = await supabaseClient.from("comments").insert({ post_id: story.id, author_id: currentUser.id, body: text });
-      if (error) throw error;
-      story.comments = (Number(story.comments) || 0) + 1;
-      post.querySelector(".post-meta span:last-child").textContent = `${story.comments} comments`;
-      input.value = "";
-      showToast("Reply added");
-    } catch (error) {
-      showToast(error.message);
-    } finally {
-      button.disabled = false;
-    }
-  });
   target.append(post);
 }
 let currentCommentsStoryId = null;
-async function openCommentsPanel(story, post) {
-  currentCommentsStoryId = story.id;
+async function openCommentsPanel(storyId) {
+  currentCommentsStoryId = storyId;
   const panel = document.querySelector("#comments-panel");
   const list = document.querySelector("#comments-list");
   panel.classList.add("open");
   list.replaceChildren();
   list.innerHTML = '<div class="empty-state">Loading comments...</div>';
   try {
-    const { data: comments, error } = await supabaseClient.from("comments").select("id, body, created_at, author_id, profiles:profiles!comments_author_id_fkey(display_name)").eq("post_id", story.id).order("created_at", { ascending: true });
+    const { data: comments, error } = await supabaseClient.from("comments").select("id, body, created_at, author_id").eq("post_id", storyId).order("created_at", { ascending: true });
     if (error) throw error;
+    const authorIds = [...new Set((comments || []).map((c) => c.author_id).filter(Boolean))];
+    const authors = new Map();
+    if (authorIds.length) {
+      const { data: profiles } = await supabaseClient.from("profiles").select("id, display_name").in("id", authorIds);
+      for (const p of profiles || []) authors.set(p.id, p.display_name);
+    }
     list.replaceChildren();
     if (!comments?.length) { list.innerHTML = '<div class="empty-state">No comments yet. Be the first to reply.</div>'; return; }
     for (const comment of comments) {
       const item = document.createElement("div");
       item.className = "comment-item";
-      const name = comment.profiles?.display_name || "Unknown";
+      const name = authors.get(comment.author_id) || "Unknown";
       item.innerHTML = `<strong>${escapeHtml(name)}</strong><p>${escapeHtml(comment.body)}</p><time>${formatDate(comment.created_at)}</time>`;
       list.append(item);
     }
@@ -233,13 +217,11 @@ async function addComment(storyId, body) {
   const { error } = await supabaseClient.from("comments").insert({ post_id: storyId, author_id: currentUser.id, body: text });
   if (error) { showToast(error.message); return; }
   showToast("Reply added");
-  const post = [...document.querySelectorAll(".post")].find((el) => el.querySelector(".post-copy")?.dataset?.storyId === String(storyId));
   const story = state.stories.find((s) => String(s.id) === String(storyId));
   if (story) { story.comments = (Number(story.comments) || 0) + 1; }
+  const post = [...document.querySelectorAll(".post")].find((el) => el.querySelector(".post-copy")?.dataset?.storyId === String(storyId));
   if (post) { post.querySelector(".post-meta span:last-child").textContent = `${story?.comments || 1} comments`; }
-  const panel = document.querySelector("#comments-panel");
-  const originalStoryId = currentCommentsStoryId;
-  if (panel.classList.contains("open") && originalStoryId === storyId) openCommentsPanel({ id: storyId }, post);
+  openCommentsPanel(storyId);
 }
 document.querySelector("#comments-close")?.addEventListener("click", () => document.querySelector("#comments-panel").classList.remove("open"));
 document.querySelector("#comments-composer")?.addEventListener("submit", async (event) => {
