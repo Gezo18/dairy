@@ -102,6 +102,7 @@ function renderStory(story, target = feedList) {
   const post = document.createElement("article");
   post.className = "post";
   const author = typeof story.author === "string" ? story.author : (story.author?.name || "Anonymous");
+  const authorId = typeof story.author === "object" ? story.author?.id : null;
   const avatarUrl = typeof story.author === "object" ? story.author?.avatar : "";
   const avatarHtml = avatarUrl ? `<img src="${escapeAttr(avatarUrl)}" alt="">` : author.slice(0, 2).toUpperCase();
   const likes = Number(story.likes) || 0;
@@ -113,14 +114,22 @@ function renderStory(story, target = feedList) {
   post.innerHTML = `
     <div class="post-header">
       <div class="person">
-        <span class="avatar ${avatarUrl ? "has-image" : ""}">${avatarHtml}</span>
-        <div class="person-details"><strong>${escapeHtml(author)}</strong><small>${formatDate(story.createdAt)} · ${escapeHtml(story.audience || "Public")}${story.place ? ` · ${escapeHtml(story.place)}` : ""}</small></div>
+        <span class="avatar ${avatarUrl ? "has-image" : ""}" ${authorId && authorId !== currentUser?.id ? `data-author-id="${escapeAttr(authorId)}" style="cursor:pointer"` : ""}>${avatarHtml}</span>
+        <div class="person-details"><strong ${authorId && authorId !== currentUser?.id ? `data-author-id="${escapeAttr(authorId)}" style="cursor:pointer;text-decoration:underline"` : ""}>${escapeHtml(author)}</strong><small>${formatDate(story.createdAt)} · ${escapeHtml(story.audience || "Public")}${story.place ? ` · ${escapeHtml(story.place)}` : ""}</small></div>
       </div>
       ${isAuthor ? `<button class="post-delete" type="button">Delete</button>` : ""}
     </div>
     <p class="post-copy" data-story-id="${escapeAttr(story.id)}">${escapeHtml(story.text)}</p>${photo}
     <div class="post-meta"><span>♡ ${likes} people like this</span><span>${comments} comments</span></div>
     <div class="post-actions"><button class="post-action like-story" type="button">♡ Like</button><button class="post-action comment-story" type="button">◯ Comment</button><button class="post-action save-story ${saved ? "active" : ""}" type="button">${saved ? "♥ Saved" : "♡ Save"}</button><button class="post-action share-story" type="button">↗ Share</button></div><div class="comment-box" hidden><form><input maxlength="1000" placeholder="Write a kind reply..."><button class="button" type="submit">Reply</button></form></div>`;
+  post.querySelectorAll("[data-author-id]").forEach((el) => {
+    el.addEventListener("click", () => {
+      const id = el.getAttribute("data-author-id");
+      if (id && id !== currentUser?.id) {
+        location.hash = `profile-${id}`;
+      }
+    });
+  });
   if (story.photo) {
     try {
       const photoUrl = new URL(story.photo, location.origin);
@@ -424,7 +433,8 @@ function renderProfile() {
   const bioEl = document.querySelector("#profile-bio");
   const gridEl = document.querySelector("#profile-grid");
   if (!nameEl) return;
-  if (!currentUser) {
+  const profileId = location.hash.includes("profile-") ? location.hash.split("profile-")[1] : (currentUser?.id || null);
+  if (!profileId) {
     nameEl.textContent = "Sign in to view your profile";
     emailEl.textContent = "";
     avatarEl.textContent = "?";
@@ -436,19 +446,20 @@ function renderProfile() {
     gridEl.innerHTML = '<div class="empty-state">Sign in to see your stories.</div>';
     return;
   }
-  const initials = (currentUser.user_metadata?.display_name || currentUser.email || "U").slice(0, 2).toUpperCase();
-  const profileData = state.profiles.get(currentUser.id) || {};
+  const profileData = state.profiles.get(profileId) || {};
+  const isMe = profileId === currentUser?.id;
+  const initials = (profileData.display_name || "?").slice(0, 2).toUpperCase();
   const avatarUrl = profileData.avatar_url || "";
   avatarEl.className = "avatar profile-avatar" + (avatarUrl ? " has-image" : "");
   avatarEl.innerHTML = avatarUrl ? `<img src="${escapeAttr(avatarUrl)}" alt="">` : initials;
-  nameEl.textContent = currentUser.user_metadata?.display_name || currentUser.email || "You";
-  emailEl.textContent = currentUser.email || "";
+  nameEl.textContent = profileData.display_name || "User";
+  emailEl.textContent = profileData.email || "";
   if (bioEl) bioEl.textContent = profileData.bio || "";
-  const myStories = state.stories.filter((story) => story.author?.id === currentUser.id);
-  storiesEl.textContent = myStories.length;
-  likesEl.textContent = myStories.reduce((sum, story) => sum + (Number(story.likes) || 0), 0);
-  joinedEl.textContent = currentUser.created_at ? new Date(currentUser.created_at).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "-";
-  renderProfileGrid("profile-grid", myStories);
+  const userStories = state.stories.filter((story) => story.author?.id === profileId);
+  storiesEl.textContent = userStories.length;
+  likesEl.textContent = userStories.reduce((sum, story) => sum + (Number(story.likes) || 0), 0);
+  joinedEl.textContent = profileData.created_at ? new Date(profileData.created_at).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "-";
+  renderProfileGrid("profile-grid", userStories);
 }
 function renderProfileGrid(id, stories) {
   const target = document.querySelector(`#${id}`);
@@ -478,7 +489,7 @@ function renderViews() {
   renderCollection("saved-list", state.stories.filter((story) => state.saved.includes(story.id)));
   renderCollection("discover-list", discoverStories);
 }
-function navigate() { const requestedHash = location.hash.replace("#", "") || "feed"; const hash = document.querySelector(`#${CSS.escape(requestedHash)}.view`) ? requestedHash : "feed"; document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === hash)); document.querySelectorAll(".side-menu a").forEach((link) => link.classList.toggle("active", link.getAttribute("href") === `#${hash}`)); if (hash === "my-dairy" || hash === "saved" || hash === "discover" || hash === "profile" || hash === "following") renderViews(); if (hash === "profile") renderProfile(); if (hash === "inbox") loadUsers(); if (hash === "feed") loadStoriesRow(); }
+function navigate() { const requestedHash = location.hash.replace("#", "") || "feed"; const hash = document.querySelector(`#${CSS.escape(requestedHash)}.view`) ? requestedHash : "feed"; document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === hash)); document.querySelectorAll(".side-menu a").forEach((link) => link.classList.toggle("active", link.getAttribute("href") === `#${hash}`)); if (hash === "my-dairy" || hash === "saved" || hash === "discover" || hash === "profile" || hash === "following") renderViews(); if (hash === "profile" || hash.startsWith("profile-")) renderProfile(); if (hash === "inbox") loadUsers(); if (hash === "feed") loadStoriesRow(); }
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>'"]/g, (character) => ({
@@ -702,6 +713,14 @@ authForm?.addEventListener("submit", async (event) => {
     submitButton.textContent = authMode === "signin" ? "Sign in" : "Create account";
   }
 });
+document.querySelector("#theme-toggle")?.addEventListener("click", () => {
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  document.documentElement.setAttribute("data-theme", isDark ? "light" : "dark");
+  localStorage.setItem("dairy-theme", isDark ? "light" : "dark");
+});
+if (localStorage.getItem("dairy-theme") === "dark" || (!localStorage.getItem("dairy-theme") && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+  document.documentElement.setAttribute("data-theme", "dark");
+}
 supabaseClient?.auth.getSession().then(({ data }) => {
   currentUser = data.session?.user || null;
   updateAuthUi();
@@ -711,7 +730,7 @@ supabaseClient?.auth.getSession().then(({ data }) => {
   loadStoriesRow();
   supabaseClient.channel("inbox").on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
     if (payload.new.conversation_id === currentConversationId) loadMessages(currentConversationId);
-    loadUsers();
+    loadConversations();
   }).subscribe();
 });
 supabaseClient?.auth.onAuthStateChange((_event, session) => {
