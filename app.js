@@ -185,13 +185,18 @@ async function openCommentsPanel(storyId) {
   currentCommentsStoryId = storyId;
   const post = [...document.querySelectorAll(".post")].find((el) => el.querySelector(".post-copy")?.dataset?.storyId === String(storyId));
   if (!post) return;
-  const existing = post.querySelector(".comments-section");
-  if (existing) { existing.hidden = false; existing.scrollIntoView({ behavior: "smooth", block: "nearest" }); return; }
-  const section = document.createElement("div");
-  section.className = "comments-section";
-  section.innerHTML = '<h4>Comments</h4><div class="comments-list"><div class="empty-state">Loading...</div></div><form class="comment-composer"><input type="text" maxlength="2000" placeholder="Add a comment..." autocomplete="off"><button class="button" type="button">Post</button></form>';
-  post.after(section);
+  let section = post.querySelector(".comments-section");
+  if (!section) {
+    section = document.createElement("div");
+    section.className = "comments-section";
+    section.innerHTML = '<h4>Comments</h4><div class="comments-list"><div class="empty-state">Loading...</div></div><form class="comment-composer"><input type="text" maxlength="2000" placeholder="Add a comment..." autocomplete="off"><button class="button" type="button">Post</button></form>';
+    post.after(section);
+  }
+  section.hidden = false;
   section.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  const list = section.querySelector(".comments-list");
+  list.replaceChildren();
+  list.innerHTML = '<div class="empty-state">Loading...</div>';
   try {
     const { data: comments, error } = await supabaseClient.from("comments").select("id, body, created_at, author_id").eq("post_id", storyId).order("created_at", { ascending: true });
     if (error) throw error;
@@ -201,7 +206,6 @@ async function openCommentsPanel(storyId) {
       const { data: profiles } = await supabaseClient.from("profiles").select("id, display_name").in("id", authorIds);
       for (const p of profiles || []) authors.set(p.id, p.display_name);
     }
-    const list = section.querySelector(".comments-list");
     list.replaceChildren();
     if (!comments?.length) { list.innerHTML = '<div class="empty-state">No comments yet. Be the first.</div>'; return; }
     for (const comment of comments) {
@@ -213,8 +217,10 @@ async function openCommentsPanel(storyId) {
       list.append(item);
     }
   } catch (error) {
-    section.querySelector(".comments-list").innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+    list.innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
   }
+  const composer = section.querySelector(".comment-composer");
+  composer.replaceWith(composer.cloneNode(true));
   section.querySelector(".comment-composer").addEventListener("click", async (event) => {
     if (event.target.tagName !== "BUTTON") return;
     const input = section.querySelector(".comment-composer input");
