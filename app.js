@@ -121,7 +121,7 @@ function renderStory(story, target = feedList) {
     </div>
     <p class="post-copy" data-story-id="${escapeAttr(story.id)}">${escapeHtml(story.text)}</p>${photo}
     <div class="post-meta"><span>♡ ${likes} people like this</span><span>${comments} comments</span></div>
-    <div class="post-actions"><button class="post-action like-story" type="button">♡ Like</button><button class="post-action comment-story" type="button">◯ Comment</button><button class="post-action save-story ${saved ? "active" : ""}" type="button">${saved ? "♥ Saved" : "♡ Save"}</button><button class="post-action share-story" type="button">↗ Share</button></div><div class="comment-box" hidden><form><input maxlength="1000" placeholder="Write a kind reply..."><button class="button" type="submit">Reply</button></form></div>`;
+    <div class="post-actions"><button class="post-action like-story" type="button">♡ Like</button><button class="post-action comment-story" type="button">◯ Comment</button><button class="post-action save-story ${saved ? "active" : ""}" type="button">${saved ? "♥ Saved" : "♡ Save"}</button><button class="post-action share-story" type="button">↗ Share</button></div>`;
   post.querySelectorAll("[data-author-id]").forEach((el) => {
     el.addEventListener("click", () => {
       const id = el.getAttribute("data-author-id");
@@ -189,7 +189,7 @@ async function openCommentsPanel(storyId) {
   if (existing) { existing.hidden = false; existing.scrollIntoView({ behavior: "smooth", block: "nearest" }); return; }
   const section = document.createElement("div");
   section.className = "comments-section";
-  section.innerHTML = '<h4>Comments</h4><div class="comments-list"><div class="empty-state">Loading...</div></div><form class="comment-composer"><input type="text" maxlength="2000" placeholder="Add a comment..." autocomplete="off"><button class="button" type="submit">Post</button></form>';
+  section.innerHTML = '<h4>Comments</h4><div class="comments-list"><div class="empty-state">Loading...</div></div><form class="comment-composer"><input type="text" maxlength="2000" placeholder="Add a comment..." autocomplete="off"><button class="button" type="button">Post</button></form>';
   post.after(section);
   section.scrollIntoView({ behavior: "smooth", block: "nearest" });
   try {
@@ -215,8 +215,8 @@ async function openCommentsPanel(storyId) {
   } catch (error) {
     section.querySelector(".comments-list").innerHTML = `<div class="empty-state">${escapeHtml(error.message)}</div>`;
   }
-  section.querySelector(".comment-composer").addEventListener("submit", async (event) => {
-    event.preventDefault();
+  section.querySelector(".comment-composer").addEventListener("click", async (event) => {
+    if (event.target.tagName !== "BUTTON") return;
     const input = section.querySelector(".comment-composer input");
     const text = input.value.trim();
     if (!text) return;
