@@ -3,7 +3,9 @@
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<meta name="description" content="Dairy is a friendly place to share the stories that make up your day.">
+	<meta name="description" content="A friendly place to share the stories that make up your day.">
+	<meta property="og:title" content="Dairy - Share your story">
+	<meta property="og:description" content="A friendly place to share the stories that make up your day.">
 	<title>Dairy - Share your story</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com">
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,6 +22,8 @@
 			--line: #e1e5de;
 			--yellow: #f3ca72;
 			--shadow: 0 10px 30px rgba(45, 68, 59, 0.08);
+			--story-font-size: 0.95rem;
+			--story-line-height: 1.6;
 		}
 
 		[data-theme="dark"] {
@@ -32,6 +36,24 @@
 			--green-light: rgba(138, 181, 154, 0.18);
 			--coral: #e07a5f;
 			--shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+		}
+
+		html[data-font-size="compact"] {
+			--story-font-size: 0.86rem;
+			--story-line-height: 1.48;
+		}
+		html[data-font-size="comfortable"] {
+			--story-font-size: 1.12rem;
+			--story-line-height: 1.74;
+		}
+
+		html[data-feed-view="compact"] .post {
+			padding: 14px 18px;
+			margin-bottom: 12px;
+		}
+		html[data-feed-view="compact"] .post-image {
+			aspect-ratio: 16 / 9;
+			max-height: 220px;
 		}
 
 		* { box-sizing: border-box; }
@@ -116,7 +138,7 @@
 		.person-details strong { display: block; font-size: 0.9rem; }
 		.person-details small { color: var(--muted); font-size: 0.73rem; }
 		.post-menu { border: 0; color: var(--muted); background: transparent; font-size: 1.2rem; }
-		.post-copy { margin: 17px 0 14px; font-size: 0.94rem; }
+		.post-copy { margin: 17px 0 14px; font-size: var(--story-font-size, 0.94rem); line-height: var(--story-line-height, 1.6); }
 		.post-image { display: block; width: 100%; min-height: 210px; border-radius: 8px; color: #735a45; background: #e8d5b8; font-family: "Playfair Display", Georgia, serif; font-size: 1.55rem; text-align: center; overflow: hidden; }
 		.post-image img, .post-image video { display: block; width: 100%; height: auto; min-height: 210px; object-fit: cover; }
 		.post-image.green { color: #f9f7ed; background: var(--green); }
@@ -142,9 +164,32 @@
 		.view-intro { margin-bottom: 20px; }
 		.view-intro p { color: var(--muted); font-size: .88rem; }
 		.empty-state { padding: 34px 20px; text-align: center; color: var(--muted); background: var(--card); border: 1px dashed var(--line); border-radius: 12px; }
-		.settings-form { display: grid; gap: 15px; padding: 20px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
-		.settings-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-		.danger-button { padding: 8px 10px; border: 1px solid #d47762; border-radius: 7px; color: #b34f3d; background: transparent; font-size: .78rem; font-weight: 700; }
+		.settings-form { display: grid; gap: 20px; }
+		.settings-section { display: grid; gap: 16px; padding: 22px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+		.settings-section-header h2 { margin: 0 0 4px; font-size: 1.16rem; font-weight: 700; color: var(--ink); }
+		.settings-section .section-desc { margin: 0; color: var(--muted); font-size: 0.82rem; }
+		.settings-toggles { display: grid; gap: 14px; }
+		.settings-toggles .check-row { display: flex; align-items: flex-start; gap: 11px; cursor: pointer; }
+		.settings-toggles .check-row input { margin-top: 3px; accent-color: var(--green); }
+		.settings-toggles .check-row span { display: flex; flex-direction: column; font-size: 0.88rem; }
+		.settings-toggles .check-row small { color: var(--muted); font-size: 0.77rem; margin-top: 2px; }
+		.settings-export-box, .session-management-box, .danger-box { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 9px; flex-wrap: wrap; }
+		.settings-export-box p, .session-management-box p, .danger-box p { margin: 4px 0 0; color: var(--muted); font-size: 0.8rem; }
+		.export-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+		.secondary-button { padding: 8px 14px; border: 1px solid var(--line); border-radius: 7px; color: var(--ink); background: var(--card); font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.18s ease; }
+		.secondary-button:hover { border-color: var(--green); background: var(--green-light); color: var(--green); }
+		.settings-danger-zone { border-color: rgba(212, 119, 98, 0.35); }
+		.danger-title { color: #b34f3d !important; }
+		.danger-text { color: #b34f3d; }
+		.danger-outline-button { padding: 8px 14px; border: 1px solid #d47762; border-radius: 7px; color: #b34f3d; background: transparent; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.18s ease; }
+		.danger-outline-button:hover { background: rgba(212, 119, 98, 0.1); }
+		.password-change-box { display: grid; gap: 14px; padding: 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 9px; }
+		.password-change-box h3 { margin: 0; font-size: 0.95rem; color: var(--ink); }
+		.password-actions { display: flex; justify-content: flex-end; }
+		.settings-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 4px; }
+		.settings-status { font-size: 0.84rem; color: var(--green); font-weight: 600; min-height: 1.2em; }
+		.danger-button { padding: 8px 14px; border: 1px solid #d47762; border-radius: 7px; color: #b34f3d; background: transparent; font-size: .8rem; font-weight: 700; cursor: pointer; }
+		.danger-button:hover { background: #b34f3d; color: white; }
 		.profile-card { padding: 24px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); margin-bottom: 22px; }
 		.profile-header { display: flex; gap: 18px; align-items: center; margin-bottom: 18px; }
 		.profile-avatar { width: 72px; height: 72px; font-size: 1.6rem; }
@@ -178,6 +223,19 @@
 		.inbox-composer { display: flex; gap: 10px; padding: 14px; border-top: 1px solid var(--line); }
 		.inbox-composer input { flex: 1; padding: 10px 11px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--paper); outline: 0; }
 		.inbox-composer input:focus { border-color: var(--green); }
+		.comments-section { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
+		.comments-section h4 { margin: 0 0 10px; font-size: 0.85rem; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+		.comments-list { display: grid; gap: 10px; max-height: 320px; overflow: auto; padding-right: 4px; }
+		.comment-item { display: flex; gap: 10px; }
+		.comment-avatar { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; font-size: 0.7rem; font-weight: 700; color: white; background: var(--green); }
+		.comment-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+		.comment-body { flex: 1; min-width: 0; }
+		.comment-body strong { display: block; font-size: 0.82rem; color: var(--ink); margin-bottom: 2px; }
+		.comment-body p { margin: 0; font-size: 0.88rem; color: var(--ink); line-height: 1.35; }
+		.comment-body time { display: block; margin-top: 4px; color: var(--muted); font-size: 0.7rem; }
+		.comment-composer { display: flex; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+		.comment-composer input { flex: 1; padding: 10px 11px; border: 1px solid var(--line); border-radius: 8px; outline: 0; background: var(--paper); color: var(--ink); }
+		.comment-composer input:focus { border-color: var(--green); }
 		@media (max-width: 700px) {
 			.inbox { grid-template-columns: 1fr; }
 			.inbox-sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
@@ -347,7 +405,208 @@
 				</div>
 			</div>
 		</section>
-		<section id="settings" class="view" aria-labelledby="settings-title"><div class="view-intro"><span class="eyebrow">Make Dairy yours</span><h1 id="settings-title">Settings</h1><p>Control your profile and notification preferences.</p></div><form class="settings-form" id="settings-form"><div class="form-row"><label class="field">Display name<input id="setting-name" required maxlength="60"></label><label class="field">Email<input id="setting-email" type="email" readonly></label></div><label class="field">Bio<textarea id="setting-bio" maxlength="500" rows="3"></textarea></label><label class="field">Profile picture<input id="setting-avatar" type="file" accept="image/*"></label><label class="field">Default audience<select id="setting-audience"><option>Public</option><option>Friends</option><option>Only me</option></select></label><label class="check-row"><input id="setting-notifications" type="checkbox"> Email me about replies to my stories</label><div class="settings-actions"><button class="danger-button" id="settings-signout" type="button">Sign out</button><button class="button" type="submit">Save settings</button></div></form></section>
+		<section id="settings" class="view" aria-labelledby="settings-title">
+			<div class="view-intro">
+				<span class="eyebrow">Personalize Dairy</span>
+				<h1 id="settings-title">Settings</h1>
+				<p>Customize your profile, reading experience, diary preferences, privacy, and account security.</p>
+			</div>
+
+			<form class="settings-form" id="settings-form">
+				<!-- Section 1: Profile & Identity -->
+				<div class="settings-section" id="settings-section-profile">
+					<div class="settings-section-header">
+						<h2>Profile & Identity</h2>
+						<p class="section-desc">How other storytellers see you across Dairy.</p>
+					</div>
+					<div class="form-row">
+						<label class="field" id="field-setting-name">Display name
+							<input id="setting-name" required maxlength="60" placeholder="Your name or pen name">
+						</label>
+						<label class="field" id="field-setting-email">Email address
+							<input id="setting-email" type="email" readonly placeholder="your@email.com">
+						</label>
+					</div>
+					<label class="field" id="field-setting-bio">Bio & storytelling focus
+						<textarea id="setting-bio" maxlength="500" rows="3" placeholder="A short bio about yourself and the moments you like to write about..."></textarea>
+					</label>
+					<div class="form-row">
+						<label class="field" id="field-setting-avatar">Profile picture
+							<div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
+								<span class="avatar" id="setting-avatar-preview" style="width:42px;height:42px;flex-shrink:0;">AM</span>
+								<input id="setting-avatar" type="file" accept="image/*" style="flex:1;">
+							</div>
+						</label>
+						<label class="field" id="field-setting-audience">Default story audience
+							<select id="setting-audience">
+								<option value="Public">Public (Everyone)</option>
+								<option value="Friends">Friends Only</option>
+								<option value="Only me">Only Me (Private Diary)</option>
+							</select>
+						</label>
+					</div>
+				</div>
+
+				<!-- Section 2: Appearance & Reading -->
+				<div class="settings-section" id="settings-section-appearance">
+					<div class="settings-section-header">
+						<h2>Appearance & Reading</h2>
+						<p class="section-desc">Fine-tune the typography, color theme, and feed layout.</p>
+					</div>
+					<div class="form-row">
+						<label class="field" id="field-setting-theme">Color theme
+							<select id="setting-theme">
+								<option value="system">System Default</option>
+								<option value="light">Warm Light (Paper)</option>
+								<option value="dark">Cozy Dark (Twilight)</option>
+							</select>
+						</label>
+						<label class="field" id="field-setting-fontsize">Reading text size
+							<select id="setting-fontsize">
+								<option value="compact">Compact (14px)</option>
+								<option value="standard">Standard (16px)</option>
+								<option value="comfortable">Comfortable / Large (18px)</option>
+							</select>
+						</label>
+						<label class="field" id="field-setting-feedview">Feed display style
+							<select id="setting-feedview">
+								<option value="cards">Comfortable Cards</option>
+								<option value="compact">Compact List</option>
+							</select>
+						</label>
+					</div>
+				</div>
+
+				<!-- Section 3: Writing & Data Portability -->
+				<div class="settings-section" id="settings-section-writing">
+					<div class="settings-section-header">
+						<h2>Writing & Data Portability</h2>
+						<p class="section-desc">Composer behavior and exporting your personal stories for safekeeping.</p>
+					</div>
+					<div class="settings-toggles">
+						<label class="check-row" id="check-setting-autosave">
+							<input id="setting-autosave" type="checkbox" checked>
+							<span><strong>Auto-save drafts</strong><small>Preserve in-progress stories locally so unposted thoughts aren't lost</small></span>
+						</label>
+						<label class="check-row" id="check-setting-remembermeta">
+							<input id="setting-remembermeta" type="checkbox" checked>
+							<span><strong>Remember composer details</strong><small>Automatically pre-fill your last selected feeling tag and place</small></span>
+						</label>
+					</div>
+					<div class="settings-export-box">
+						<div>
+							<strong>Export My Diary</strong>
+							<p>Download an offline archive of all your authored stories, reactions, and media references.</p>
+						</div>
+						<div class="export-actions">
+							<button type="button" class="secondary-button" id="setting-export-json">Export as JSON</button>
+							<button type="button" class="secondary-button" id="setting-export-md">Export as Markdown</button>
+						</div>
+					</div>
+				</div>
+
+				<!-- Section 4: Privacy & Social Interactions -->
+				<div class="settings-section" id="settings-section-privacy">
+					<div class="settings-section-header">
+						<h2>Privacy & Social Interactions</h2>
+						<p class="section-desc">Control who can message you and reply to your stories.</p>
+					</div>
+					<div class="form-row">
+						<label class="field" id="field-setting-dms">Direct messaging
+							<select id="setting-dmprivacy">
+								<option value="everyone">Everyone</option>
+								<option value="friends">Friends Only</option>
+								<option value="nobody">Nobody (Turn off DMs)</option>
+							</select>
+						</label>
+						<label class="field" id="field-setting-comments">Comments on your stories
+							<select id="setting-commentprivacy">
+								<option value="everyone">Everyone</option>
+								<option value="friends">Friends Only</option>
+								<option value="nobody">Disable comments by default</option>
+							</select>
+						</label>
+					</div>
+					<div class="settings-toggles">
+						<label class="check-row" id="check-setting-discoverable">
+							<input id="setting-discoverable" type="checkbox" checked>
+							<span><strong>Discoverable in Community</strong><small>Include your profile in the "People to follow" recommendations for other writers</small></span>
+						</label>
+					</div>
+				</div>
+
+				<!-- Section 5: Notification Preferences -->
+				<div class="settings-section" id="settings-section-notifications">
+					<div class="settings-section-header">
+						<h2>Notification Preferences</h2>
+						<p class="section-desc">Choose which updates and interactions you want to receive alerts for.</p>
+					</div>
+					<div class="settings-toggles">
+						<label class="check-row" id="check-setting-notify-replies">
+							<input id="setting-notify-replies" type="checkbox" checked>
+							<span><strong>Replies & Comments</strong><small>Notify when someone comments on one of your stories</small></span>
+						</label>
+						<label class="check-row" id="check-setting-notify-likes">
+							<input id="setting-notify-likes" type="checkbox" checked>
+							<span><strong>Reactions & Likes</strong><small>Notify when someone appreciates your stories</small></span>
+						</label>
+						<label class="check-row" id="check-setting-notify-messages">
+							<input id="setting-notify-messages" type="checkbox" checked>
+							<span><strong>Direct Messages</strong><small>Notify when someone sends you a private inbox message</small></span>
+						</label>
+						<label class="check-row" id="check-setting-notify-follows">
+							<input id="setting-notify-follows" type="checkbox" checked>
+							<span><strong>New Followers</strong><small>Notify when someone begins following your diary updates</small></span>
+						</label>
+					</div>
+				</div>
+
+				<!-- Save changes button for main settings -->
+				<div class="settings-actions">
+					<span class="settings-status" id="settings-status"></span>
+					<button class="button" id="settings-save-btn" type="submit">Save All Settings</button>
+				</div>
+			</form>
+
+			<!-- Section 6: Account & Security ("Danger Zone") -->
+			<div class="settings-section settings-danger-zone" id="settings-section-security">
+				<div class="settings-section-header">
+					<h2 class="danger-title">Account & Security</h2>
+					<p class="section-desc">Manage your password, active sessions, and account lifecycle.</p>
+				</div>
+				<form id="settings-password-form" class="password-change-box">
+					<h3>Change Password</h3>
+					<div class="form-row">
+						<label class="field" id="field-setting-newpassword">New password
+							<input id="setting-newpassword" type="password" minlength="8" required placeholder="At least 8 characters" autocomplete="new-password">
+						</label>
+						<label class="field" id="field-setting-confirmpassword">Confirm new password
+							<input id="setting-confirmpassword" type="password" minlength="8" required placeholder="Re-enter new password" autocomplete="new-password">
+						</label>
+					</div>
+					<div class="password-actions">
+						<button type="submit" class="secondary-button" id="setting-password-btn">Update Password</button>
+					</div>
+				</form>
+				<div class="session-management-box">
+					<div>
+						<strong>Linked Sessions</strong>
+						<p>Current active session on this device. Sign out to revoke credentials everywhere.</p>
+					</div>
+					<div class="export-actions">
+						<button type="button" class="secondary-button" id="settings-signout">Sign Out</button>
+						<button type="button" class="danger-outline-button" id="settings-signout-all">Log Out of All Devices</button>
+					</div>
+				</div>
+				<div class="danger-box">
+					<div>
+						<strong class="danger-text">Delete Account</strong>
+						<p>Permanently remove your profile, stories, photos, and messages. This action cannot be reversed.</p>
+					</div>
+					<button type="button" class="danger-button" id="settings-delete-account">Delete Account</button>
+				</div>
+			</div>
+		</section>
 		<section id="profile" class="view" aria-labelledby="profile-title">
 			<div class="profile-header">
 				<span class="avatar profile-avatar" id="profile-avatar">AM</span>
@@ -367,8 +626,8 @@
 				</div>
 			</div>
 		</div>
-		<div class="profile-grid" id="profile-grid"></div>
-	</section>
+			<div class="profile-grid" id="profile-grid"></div>
+		</section>
 
 		<aside aria-label="Community panel">
 			<section class="right-panel">
@@ -395,7 +654,7 @@
 			</div>
 		</div>
 	</div>
-	<div class="auth-panel" id="auth-panel" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+	<div class="auth-panel" id="auth-panel">
 		<form class="auth-card" id="auth-form">
 			<button class="auth-close" id="auth-close" type="button">Close</button>
 			<h2 id="auth-title">Sign in to Dairy</h2>

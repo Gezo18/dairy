@@ -4,9 +4,7 @@ const feedList = document.querySelector("#feed-list");
 const authPanel = document.querySelector("#auth-panel");
 const authForm = document.querySelector("#auth-form");
 const authButton = document.querySelector("#auth-button");
-const supabaseUrl = location.hostname === "127.0.0.1" || location.hostname === "localhost"
-  ? "https://cwjcljzraxkclowrcizx.supabase.co"
-  : `${location.origin}/api/supabase`;
+const supabaseUrl = "https://cwjcljzraxkclowrcizx.supabase.co";
 const supabaseClient = window.supabase?.createClient(
   supabaseUrl,
   "sb_publishable_0TY2UkTjVtyqvbHsO4-EqA_jrIE3XNc"
@@ -23,13 +21,61 @@ function readStorage(key, fallback) {
   }
 }
 
+const defaultSettings = {
+  name: "You",
+  bio: "",
+  audience: "Public",
+  theme: "system",
+  fontSize: "standard",
+  feedView: "cards",
+  autoSaveDrafts: true,
+  rememberComposerMeta: true,
+  dmPrivacy: "everyone",
+  commentPrivacy: "everyone",
+  discoverable: true,
+  notifyReplies: true,
+  notifyLikes: true,
+  notifyMessages: true,
+  notifyFollows: true
+};
+
 const state = {
   stories: [],
   saved: Array.isArray(readStorage("dairy-saved", [])) ? readStorage("dairy-saved", []) : [],
   follows: Array.isArray(readStorage("dairy-follows", [])) ? readStorage("dairy-follows", []) : [],
-  settings: { name: "You", audience: "Public", notifications: true, ...readStorage("dairy-settings", {}) },
+  settings: { ...defaultSettings, ...readStorage("dairy-settings", {}) },
   profiles: new Map()
 };
+
+function applyTheme(theme) {
+  if (theme === "dark") {
+    document.documentElement.setAttribute("data-theme", "dark");
+  } else if (theme === "light") {
+    document.documentElement.removeAttribute("data-theme");
+  } else {
+    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      document.documentElement.setAttribute("data-theme", "dark");
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+  }
+}
+
+function applyFontSize(size) {
+  if (size === "compact" || size === "comfortable") {
+    document.documentElement.setAttribute("data-font-size", size);
+  } else {
+    document.documentElement.removeAttribute("data-font-size");
+  }
+}
+
+function applyFeedView(view) {
+  if (view === "compact") {
+    document.documentElement.setAttribute("data-feed-view", "compact");
+  } else {
+    document.documentElement.removeAttribute("data-feed-view");
+  }
+}
 
 function showToast(message) { const toast = document.createElement("div"); toast.className = "toast"; toast.textContent = message; document.body.append(toast); setTimeout(() => toast.remove(), 2400); }
 function formatDate(value) { return value ? new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "Today"; }
@@ -66,35 +112,55 @@ async function loadSuggestions() {
 
 function openAuth(mode = "signin") {
   authMode = mode;
-  document.querySelector("#auth-title").textContent = mode === "signin" ? "Sign in to Dairy" : "Create your Dairy account";
-  document.querySelector("#auth-copy").textContent = mode === "signin" ? "Use your account to share and see protected stories." : "Create an account to join the community.";
-  document.querySelector("#auth-name").hidden = mode === "signin";
-  document.querySelector("#auth-name").required = mode === "signup";
-  document.querySelector("#auth-password").autocomplete = mode === "signin" ? "current-password" : "new-password";
-  document.querySelector("#auth-submit").textContent = mode === "signin" ? "Sign in" : "Create account";
-  document.querySelector("#auth-switch").textContent = mode === "signin" ? "Create an account" : "Already have an account?";
-  document.querySelector("#auth-error").textContent = "";
-  authPanel.classList.add("open");
-  document.querySelector("#auth-email").focus();
+  const titleEl = document.querySelector("#auth-title");
+  if (titleEl) titleEl.textContent = mode === "signin" ? "Sign in to Dairy" : "Create your Dairy account";
+  const copyEl = document.querySelector("#auth-copy");
+  if (copyEl) copyEl.textContent = mode === "signin" ? "Use your account to share and see protected stories." : "Create an account to join the community.";
+  const nameEl = document.querySelector("#auth-name");
+  if (nameEl) {
+    nameEl.hidden = mode === "signin";
+    nameEl.required = mode === "signup";
+  }
+  const passEl = document.querySelector("#auth-password");
+  if (passEl) passEl.autocomplete = mode === "signin" ? "current-password" : "new-password";
+  const submitEl = document.querySelector("#auth-submit");
+  if (submitEl) submitEl.textContent = mode === "signin" ? "Sign in" : "Create account";
+  const switchEl = document.querySelector("#auth-switch");
+  if (switchEl) switchEl.textContent = mode === "signin" ? "Create an account" : "Already have an account?";
+  const errEl = document.querySelector("#auth-error");
+  if (errEl) errEl.textContent = "";
+  const panel = document.querySelector("#auth-panel") || authPanel;
+  panel?.classList.add("open");
+  document.querySelector("#auth-email")?.focus();
 }
 
-function closeAuth() { authPanel.classList.remove("open"); authForm.reset(); }
+function closeAuth() {
+  const panel = document.querySelector("#auth-panel") || authPanel;
+  panel?.classList.remove("open");
+  const form = document.querySelector("#auth-form") || authForm;
+  form?.reset();
+}
 function updateAuthUi() {
-  authButton.textContent = currentUser ? "Sign out" : "Sign in";
+  const btn = document.querySelector("#auth-button") || authButton;
+  if (btn) btn.textContent = currentUser ? "Sign out" : "Sign in";
   const headerAvatar = document.querySelector(".avatar");
   const profileData = currentUser ? state.profiles.get(currentUser.id) : null;
-  const avatarUrl = profileData?.avatar_url || "";
-  if (avatarUrl) {
-    headerAvatar.innerHTML = `<img src="${escapeAttr(avatarUrl)}" alt="">`;
-    headerAvatar.classList.add("has-image");
-  } else {
-    headerAvatar.textContent = currentUser?.user_metadata?.display_name?.slice(0, 2).toUpperCase() || "AM";
-    headerAvatar.classList.remove("has-image");
+  const avatarUrl = profileData?.avatar_url || state.settings?.avatarUrl || "";
+  if (headerAvatar) {
+    if (avatarUrl) {
+      headerAvatar.innerHTML = `<img src="${escapeAttr(avatarUrl)}" alt="">`;
+      headerAvatar.classList.add("has-image");
+    } else {
+      headerAvatar.textContent = currentUser?.user_metadata?.display_name?.slice(0, 2).toUpperCase() || state.settings.name?.slice(0, 2).toUpperCase() || "AM";
+      headerAvatar.classList.remove("has-image");
+    }
   }
-  document.querySelector("#setting-email").value = currentUser?.email || "";
+  const emailInput = document.querySelector("#setting-email");
+  if (emailInput) emailInput.value = currentUser?.email || "";
   if (currentUser?.user_metadata?.display_name) {
     state.settings.name = currentUser.user_metadata.display_name;
-    document.querySelector("#setting-name").value = state.settings.name;
+    const nameInput = document.querySelector("#setting-name");
+    if (nameInput) nameInput.value = state.settings.name;
   }
 }
 
@@ -157,7 +223,7 @@ function renderStory(story, target = feedList) {
       button.disabled = false;
     }
   });
- post.querySelector(".comment-story").addEventListener("click", () => openCommentsPanel(story.id));
+  post.querySelector(".comment-story").addEventListener("click", () => openCommentsPanel(story.id));
   post.querySelector(".save-story").addEventListener("click", () => toggleSaved(story, post));
   post.querySelector(".share-story").addEventListener("click", async () => { try { await navigator.clipboard.writeText(`${location.origin}/#${story.id}`); showToast("Story link copied"); } catch { showToast("Story ready to share"); } });
   post.querySelector(".post-delete")?.addEventListener("click", async () => {
@@ -244,17 +310,6 @@ async function addComment(storyId, body) {
   openCommentsPanel(storyId);
 }
 
-
-function toggleSaved(story, post) {
-  state.saved = state.saved.includes(story.id) ? state.saved.filter((id) => id !== story.id) : [...state.saved, story.id];
-  localStorage.setItem("dairy-saved", JSON.stringify(state.saved));
-  const button = post.querySelector(".save-story");
-  const active = state.saved.includes(story.id);
-  button.classList.toggle("active", active);
-  button.textContent = active ? "♥ Saved" : "♡ Save";
-  if (!active && post.parentElement?.id === "saved-list") post.remove();
-  showToast(active ? "Saved for later" : "Removed from saved");
-}
 let currentConversationId = null;
 async function loadUsers() {
   const list = document.querySelector("#user-list");
@@ -350,14 +405,90 @@ async function loadStoriesRow() {
     list.append(item);
   }
 }
+
+function fileToOptimizedDataUrl(file, maxWidth = 400, maxHeight = 400, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    if (!file) return resolve("");
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => resolve(reader.result);
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          let { width, height } = img;
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+          canvas.width = Math.max(width, 1);
+          canvas.height = Math.max(height, 1);
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        } catch {
+          resolve(reader.result);
+        }
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadToServer(file) {
+  if (!file) return "";
+  const response = await fetch("/api/upload", {
+    method: "POST",
+    headers: {
+      "Content-Type": file.type || "application/octet-stream",
+      "X-Filename": encodeURIComponent(file.name || "media.bin")
+    },
+    body: file
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Server upload failed: ${errorText}`);
+  }
+  const result = await response.json();
+  return result.url;
+}
+
 async function uploadStoryMedia(file) {
-  if (!file || !currentUser) return;
-  const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "bin";
-  const path = `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
-  const { error } = await supabaseClient.storage.from("stories").upload(path, file, { contentType: file.type, upsert: false });
-  if (error) throw error;
-  const { data } = supabaseClient.storage.from("stories").getPublicUrl(path);
-  return { url: data.publicUrl, type: file.type.startsWith("video/") ? "video" : "image" };
+  if (!file) return;
+  const isVideo = file.type.startsWith("video/");
+  let mediaUrl = "";
+
+  if (currentUser && supabaseClient) {
+    try {
+      const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "bin";
+      const path = `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
+      const { data: uploadData, error } = await supabaseClient.storage.from("stories").upload(path, file, { contentType: file.type, upsert: false });
+      if (!error && uploadData) {
+        const { data } = supabaseClient.storage.from("stories").getPublicUrl(path);
+        if (data?.publicUrl) mediaUrl = data.publicUrl;
+      }
+    } catch (e) {
+      console.warn("Supabase stories storage unavailable, falling back:", e);
+    }
+  }
+
+  if (!mediaUrl) {
+    try {
+      mediaUrl = await uploadToServer(file);
+    } catch (e) {
+      console.warn("Server upload fallback failed:", e);
+    }
+  }
+
+  if (!mediaUrl && !isVideo && file.size < 5 * 1024 * 1024) {
+    mediaUrl = await fileToOptimizedDataUrl(file, 1080, 1920, 0.85);
+  }
+
+  if (!mediaUrl) throw new Error("Could not upload story media");
+  return { url: mediaUrl, type: isVideo ? "video" : "image" };
 }
 async function createStory() {
   if (!currentUser || !supabaseClient) return openAuth();
@@ -413,6 +544,16 @@ function closeStoryViewer() {
   document.querySelector("#story-media").replaceChildren();
   document.querySelector("#story-progress").replaceChildren();
 }
+function toggleSaved(story, post) {
+  state.saved = state.saved.includes(story.id) ? state.saved.filter((id) => id !== story.id) : [...state.saved, story.id];
+  localStorage.setItem("dairy-saved", JSON.stringify(state.saved));
+  const button = post.querySelector(".save-story");
+  const active = state.saved.includes(story.id);
+  button.classList.toggle("active", active);
+  button.textContent = active ? "♥ Saved" : "♡ Save";
+  if (!active && post.parentElement?.id === "saved-list") post.remove();
+  showToast(active ? "Saved for later" : "Removed from saved");
+}
 function renderCollection(id, stories) {
   const target = document.querySelector(`#${id}`);
   target.replaceChildren();
@@ -444,8 +585,8 @@ function renderProfile() {
   }
   const profileData = state.profiles.get(profileId) || {};
   const isMe = profileId === currentUser?.id;
-  const initials = (profileData.display_name || "?").slice(0, 2).toUpperCase();
-  const avatarUrl = profileData.avatar_url || "";
+  const initials = (profileData.display_name || state.settings.name || "?").slice(0, 2).toUpperCase();
+  const avatarUrl = profileData.avatar_url || (isMe ? state.settings?.avatarUrl : "") || "";
   avatarEl.className = "avatar profile-avatar" + (avatarUrl ? " has-image" : "");
   avatarEl.innerHTML = avatarUrl ? `<img src="${escapeAttr(avatarUrl)}" alt="">` : initials;
   nameEl.textContent = profileData.display_name || "User";
@@ -512,12 +653,37 @@ async function uploadMedia(files) {
   for (const file of files) {
     if (!/^image\/(jpeg|png|gif|webp)$|^video\/(mp4|webm|quicktime)$/.test(file.type)) throw new Error("Use JPG, PNG, GIF, WEBP, MP4, or WEBM files");
     if (file.size > 50 * 1024 * 1024) throw new Error("Each media file must be 50 MB or smaller");
-    const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "bin";
-    const path = `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
-    const { error } = await supabaseClient.storage.from("post-media").upload(path, file, { contentType: file.type, upsert: false });
-    if (error) throw error;
-    const { data } = supabaseClient.storage.from("post-media").getPublicUrl(path);
-    uploaded.push({ type: file.type.startsWith("video/") ? "video" : "image", url: data.publicUrl });
+    const isVideo = file.type.startsWith("video/");
+    let mediaUrl = "";
+
+    if (currentUser && supabaseClient) {
+      try {
+        const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "bin";
+        const path = `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
+        const { data: uploadData, error } = await supabaseClient.storage.from("post-media").upload(path, file, { contentType: file.type, upsert: false });
+        if (!error && uploadData) {
+          const { data } = supabaseClient.storage.from("post-media").getPublicUrl(path);
+          if (data?.publicUrl) mediaUrl = data.publicUrl;
+        }
+      } catch (e) {
+        console.warn("Supabase post-media storage unavailable, falling back:", e);
+      }
+    }
+
+    if (!mediaUrl) {
+      try {
+        mediaUrl = await uploadToServer(file);
+      } catch (e) {
+        console.warn("Server upload fallback failed:", e);
+      }
+    }
+
+    if (!mediaUrl && !isVideo && file.size < 5 * 1024 * 1024) {
+      mediaUrl = await fileToOptimizedDataUrl(file, 1200, 1200, 0.85);
+    }
+
+    if (!mediaUrl) throw new Error("Could not process uploaded media file");
+    uploaded.push({ type: isVideo ? "video" : "image", url: mediaUrl });
   }
   return uploaded;
 }
@@ -545,17 +711,30 @@ storyForm?.addEventListener("submit", async (event) => {
     renderStory(story);
     renderViews();
     storyInput.value = "";
+    localStorage.removeItem("dairy-composer-draft");
+    if (state.settings.rememberComposerMeta) {
+      const feelingVal = document.querySelector("#feeling")?.value;
+      const placeVal = document.querySelector("#place")?.value;
+      if (feelingVal) localStorage.setItem("dairy-composer-feeling", feelingVal);
+      if (placeVal) localStorage.setItem("dairy-composer-place", placeVal);
+    }
     document.querySelector("#media-files").value = "";
     document.querySelector("#media-preview").replaceChildren();
   } catch (error) {
-    window.alert(error.message);
+    showToast(error.message || "Could not publish story");
   } finally {
     button.disabled = false;
     button.textContent = "Share story";
   }
 });
 
-document.querySelector(".composer-toggle")?.addEventListener("click", () => document.querySelector("#composer-options").classList.toggle("open"));
+storyInput?.addEventListener("input", () => {
+  if (state.settings.autoSaveDrafts) {
+    localStorage.setItem("dairy-composer-draft", storyInput.value);
+  }
+});
+
+document.querySelector(".composer-toggle")?.addEventListener("click", () => document.querySelector("#composer-options")?.classList.toggle("open"));
 document.querySelector("#media-files")?.addEventListener("change", (event) => {
   const preview = document.querySelector("#media-preview");
   preview.replaceChildren();
@@ -614,50 +793,377 @@ document.querySelectorAll(".profile-actions .button").forEach((button) => {
   });
 });
 async function uploadAvatar(file) {
-  if (!file || !currentUser) return;
+  if (!file) return "";
   if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) throw new Error("Use JPG, PNG, GIF, or WEBP");
-  if (file.size > 2 * 1024 * 1024) throw new Error("Avatar must be 2 MB or smaller");
-  const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "bin";
-  const path = `${currentUser.id}/avatar.${extension}`;
-  const { error } = await supabaseClient.storage.from("avatars").upload(path, file, { contentType: file.type, upsert: true });
-  if (error) throw error;
-  const { data } = supabaseClient.storage.from("avatars").getPublicUrl(path);
-  const avatarUrl = data.publicUrl;
-  const { error: updateError } = await supabaseClient.from("profiles").update({ avatar_url: avatarUrl }).eq("id", currentUser.id);
-  if (updateError) throw updateError;
-  state.profiles.set(currentUser.id, { ...state.profiles.get(currentUser.id), avatar_url: avatarUrl });
+  if (file.size > 5 * 1024 * 1024) throw new Error("Avatar must be 5 MB or smaller");
+
+  let avatarUrl = "";
+
+  // 1. Try Supabase storage bucket 'avatars' if user and client exist
+  if (currentUser && supabaseClient) {
+    try {
+      const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "jpg";
+      const path = `${currentUser.id}/avatar.${extension}`;
+      const { data: uploadData, error } = await supabaseClient.storage.from("avatars").upload(path, file, { contentType: file.type, upsert: true });
+      if (!error && uploadData) {
+        const { data } = supabaseClient.storage.from("avatars").getPublicUrl(path);
+        if (data?.publicUrl) avatarUrl = data.publicUrl;
+      }
+    } catch (storageErr) {
+      console.warn("Supabase avatars storage unavailable, falling back:", storageErr);
+    }
+  }
+
+  // 2. Fallback to server local upload
+  if (!avatarUrl) {
+    try {
+      avatarUrl = await uploadToServer(file);
+    } catch (serverErr) {
+      console.warn("Server upload fallback failed, using optimized data URL:", serverErr);
+    }
+  }
+
+  // 3. Fallback to optimized client-side Data URL
+  if (!avatarUrl) {
+    avatarUrl = await fileToOptimizedDataUrl(file, 256, 256, 0.85);
+  }
+
+  if (!avatarUrl) throw new Error("Could not process avatar image");
+
+  // Save to profile in Supabase if logged in
+  if (currentUser && supabaseClient) {
+    try {
+      const { error: updateError } = await supabaseClient.from("profiles").update({ avatar_url: avatarUrl }).eq("id", currentUser.id);
+      if (updateError) console.warn("Supabase profile avatar update warning:", updateError);
+    } catch (err) {
+      console.warn("Profile update error:", err);
+    }
+    const existing = state.profiles.get(currentUser.id) || {};
+    state.profiles.set(currentUser.id, { ...existing, avatar_url: avatarUrl });
+  }
+
+  // Persist locally for instant rendering
+  state.settings.avatarUrl = avatarUrl;
+  localStorage.setItem("dairy-settings", JSON.stringify(state.settings));
+
+  // Update preview in UI
+  const previewEl = document.querySelector("#setting-avatar-preview");
+  if (previewEl) {
+    previewEl.innerHTML = `<img src="${escapeAttr(avatarUrl)}" alt="">`;
+    previewEl.classList.add("has-image");
+  }
+  updateAuthUi();
+  renderProfile();
+
   return avatarUrl;
 }
-document.querySelector("#setting-name").value = state.settings.name;
-document.querySelector("#setting-audience").value = state.settings.audience;
-document.querySelector("#setting-notifications").checked = state.settings.notifications;
-document.querySelector("#setting-bio").value = state.settings.bio || "";
+function loadSettingsUi() {
+  const s = state.settings;
+  const setVal = (id, val) => { const el = document.querySelector(id); if (el && val !== undefined) el.value = val; };
+  const setCheck = (id, val) => { const el = document.querySelector(id); if (el && val !== undefined) el.checked = Boolean(val); };
+
+  setVal("#setting-name", s.name || "");
+  setVal("#setting-email", currentUser?.email || "");
+  setVal("#setting-bio", s.bio || "");
+  setVal("#setting-audience", s.audience || "Public");
+  setVal("#setting-theme", s.theme || "system");
+  setVal("#setting-fontsize", s.fontSize || "standard");
+  setVal("#setting-feedview", s.feedView || "cards");
+  setCheck("#setting-autosave", s.autoSaveDrafts !== false);
+  setCheck("#setting-remembermeta", s.rememberComposerMeta !== false);
+  setVal("#setting-dmprivacy", s.dmPrivacy || "everyone");
+  setVal("#setting-commentprivacy", s.commentPrivacy || "everyone");
+  setCheck("#setting-discoverable", s.discoverable !== false);
+  setCheck("#setting-notify-replies", s.notifyReplies !== false);
+  setCheck("#setting-notify-likes", s.notifyLikes !== false);
+  setCheck("#setting-notify-messages", s.notifyMessages !== false);
+  setCheck("#setting-notify-follows", s.notifyFollows !== false);
+
+  const currentAvatarUrl = (currentUser ? state.profiles.get(currentUser.id)?.avatar_url : null) || state.settings?.avatarUrl || "";
+  const previewEl = document.querySelector("#setting-avatar-preview");
+  if (previewEl) {
+    if (currentAvatarUrl) {
+      previewEl.innerHTML = `<img src="${escapeAttr(currentAvatarUrl)}" alt="">`;
+      previewEl.classList.add("has-image");
+    } else {
+      const initials = (s.name || "AM").slice(0, 2).toUpperCase();
+      previewEl.textContent = initials;
+      previewEl.classList.remove("has-image");
+    }
+  }
+
+  applyTheme(s.theme || "system");
+  applyFontSize(s.fontSize || "standard");
+  applyFeedView(s.feedView || "cards");
+}
+
+// Live preview when changing appearance dropdowns
+document.querySelector("#setting-theme")?.addEventListener("change", (e) => {
+  applyTheme(e.target.value);
+});
+document.querySelector("#setting-fontsize")?.addEventListener("change", (e) => {
+  applyFontSize(e.target.value);
+});
+document.querySelector("#setting-feedview")?.addEventListener("change", (e) => {
+  applyFeedView(e.target.value);
+});
+
+// Live preview when selecting an avatar file
+document.querySelector("#setting-avatar")?.addEventListener("change", (e) => {
+  const file = e.target.files?.[0];
+  if (file) {
+    const previewEl = document.querySelector("#setting-avatar-preview");
+    if (previewEl) {
+      const objUrl = URL.createObjectURL(file);
+      previewEl.innerHTML = `<img src="${objUrl}" alt="">`;
+      previewEl.classList.add("has-image");
+    }
+  }
+});
+
+// Settings form submission
 document.querySelector("#settings-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const fileInput = document.querySelector("#setting-avatar");
-  const button = document.querySelector("#settings-form button[type=submit]");
-  button.disabled = true;
+  const button = document.querySelector("#settings-save-btn");
+  const statusEl = document.querySelector("#settings-status");
+  if (button) button.disabled = true;
+  if (statusEl) statusEl.textContent = "Saving preferences...";
+
   try {
     if (fileInput?.files?.[0]) {
-      await uploadAvatar(fileInput.files[0]);
-      showToast("Profile picture updated");
+      try {
+        await uploadAvatar(fileInput.files[0]);
+        fileInput.value = "";
+        showToast("Profile picture updated");
+      } catch (avatarErr) {
+        console.warn("Avatar processing notice:", avatarErr);
+        showToast(avatarErr.message || "Could not update profile picture");
+      }
     }
-    const bio = document.querySelector("#setting-bio").value.trim();
-    const updates = { display_name: document.querySelector("#setting-name").value.trim() || "You", bio: bio || "" };
-    const { error: profileError } = await supabaseClient.from("profiles").update(updates).eq("id", currentUser.id);
-    if (profileError) throw profileError;
-    state.settings = { name: updates.display_name, audience: document.querySelector("#setting-audience").value, notifications: document.querySelector("#setting-notifications").checked, bio: updates.bio };
+
+    const name = document.querySelector("#setting-name")?.value.trim() || "You";
+    const bio = document.querySelector("#setting-bio")?.value.trim() || "";
+    const audience = document.querySelector("#setting-audience")?.value || "Public";
+    const theme = document.querySelector("#setting-theme")?.value || "system";
+    const fontSize = document.querySelector("#setting-fontsize")?.value || "standard";
+    const feedView = document.querySelector("#setting-feedview")?.value || "cards";
+    const autoSaveDrafts = Boolean(document.querySelector("#setting-autosave")?.checked);
+    const rememberComposerMeta = Boolean(document.querySelector("#setting-remembermeta")?.checked);
+    const dmPrivacy = document.querySelector("#setting-dmprivacy")?.value || "everyone";
+    const commentPrivacy = document.querySelector("#setting-commentprivacy")?.value || "everyone";
+    const discoverable = Boolean(document.querySelector("#setting-discoverable")?.checked);
+    const notifyReplies = Boolean(document.querySelector("#setting-notify-replies")?.checked);
+    const notifyLikes = Boolean(document.querySelector("#setting-notify-likes")?.checked);
+    const notifyMessages = Boolean(document.querySelector("#setting-notify-messages")?.checked);
+    const notifyFollows = Boolean(document.querySelector("#setting-notify-follows")?.checked);
+
+    state.settings = {
+      name,
+      bio,
+      audience,
+      theme,
+      fontSize,
+      feedView,
+      autoSaveDrafts,
+      rememberComposerMeta,
+      dmPrivacy,
+      commentPrivacy,
+      discoverable,
+      notifyReplies,
+      notifyLikes,
+      notifyMessages,
+      notifyFollows
+    };
     localStorage.setItem("dairy-settings", JSON.stringify(state.settings));
-    showToast("Settings saved");
+
+    applyTheme(theme);
+    applyFontSize(fontSize);
+    applyFeedView(feedView);
+
+    if (currentUser) {
+      const updates = { display_name: name, bio };
+      const { error: profileError } = await supabaseClient.from("profiles").update(updates).eq("id", currentUser.id);
+      if (profileError) console.warn("Supabase profile update warning:", profileError);
+    }
+
+    showToast("Settings saved successfully");
+    if (statusEl) {
+      statusEl.textContent = "Saved";
+      setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 3000);
+    }
     renderViews();
     renderProfile();
   } catch (error) {
-    showToast(error.message || "Could not update profile");
+    showToast(error.message || "Could not update settings");
+    if (statusEl) statusEl.textContent = "";
   } finally {
-    button.disabled = false;
+    if (button) button.disabled = false;
   }
 });
-document.querySelector("#settings-signout")?.addEventListener("click", async () => { if (currentUser) await supabaseClient.auth.signOut(); else showToast("You are already signed out"); });
+
+// Export stories
+function exportDiary(format = "json") {
+  const myStories = state.stories.filter(
+    (story) => (story.author?.id === currentUser?.id) || ((story.author?.name || story.author) === state.settings.name)
+  );
+  const storiesToExport = myStories.length ? myStories : state.stories;
+
+  if (!storiesToExport.length) {
+    showToast("No stories to export yet. Write a story first!");
+    return;
+  }
+
+  const nowStr = new Date().toISOString().slice(0, 10);
+  let blob, filename;
+
+  if (format === "json") {
+    const data = {
+      generator: "Dairy (https://github.com/Gezo18/dairy)",
+      exportedAt: new Date().toISOString(),
+      author: {
+        name: state.settings.name,
+        email: currentUser?.email || "anonymous",
+        bio: state.settings.bio || ""
+      },
+      storyCount: storiesToExport.length,
+      stories: storiesToExport.map((s) => ({
+        id: s.id,
+        createdAt: s.createdAt,
+        text: s.text,
+        feeling: s.feeling || "",
+        place: s.place || "",
+        audience: s.audience,
+        likes: s.likes || 0,
+        comments: s.comments || 0,
+        media: s.media || []
+      }))
+    };
+    blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
+    filename = `dairy-stories-${nowStr}.json`;
+  } else {
+    let md = `# Dairy Journal - ${state.settings.name}\n\n`;
+    md += `*Exported on ${new Date().toLocaleDateString()} (${storiesToExport.length} stories)*\n\n`;
+    if (state.settings.bio) md += `> ${state.settings.bio}\n\n`;
+    md += `---\n\n`;
+
+    storiesToExport.forEach((s, idx) => {
+      md += `## ${idx + 1}. ${formatDate(s.createdAt)}\n\n`;
+      const meta = [s.feeling ? `Feeling: ${s.feeling}` : "", s.place ? `Location: ${s.place}` : "", `Audience: ${s.audience}`].filter(Boolean);
+      if (meta.length) md += `*${meta.join(" · ")}*\n\n`;
+      md += `${s.text}\n\n`;
+      if (s.media && s.media.length) {
+        s.media.forEach((m) => {
+          if (m.type === "video") {
+            md += `[Video Link](${m.url})\n\n`;
+          } else {
+            md += `![Image](${m.url})\n\n`;
+          }
+        });
+      }
+      md += `❤️ ${s.likes || 0} likes · 💬 ${s.comments || 0} comments\n\n---\n\n`;
+    });
+
+    blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+    filename = `dairy-journal-${nowStr}.md`;
+  }
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast(`Exported ${storiesToExport.length} stories as ${format.toUpperCase()}`);
+}
+
+document.querySelector("#setting-export-json")?.addEventListener("click", () => exportDiary("json"));
+document.querySelector("#setting-export-md")?.addEventListener("click", () => exportDiary("markdown"));
+
+// Password Change
+document.querySelector("#settings-password-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!currentUser) {
+    showToast("Please sign in first to change password");
+    openAuth();
+    return;
+  }
+  const newPass = document.querySelector("#setting-newpassword")?.value;
+  const confirmPass = document.querySelector("#setting-confirmpassword")?.value;
+  const btn = document.querySelector("#setting-password-btn");
+
+  if (!newPass || newPass.length < 8) {
+    showToast("Password must be at least 8 characters");
+    return;
+  }
+  if (newPass !== confirmPass) {
+    showToast("Passwords do not match");
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Updating...";
+  try {
+    const { error } = await supabaseClient.auth.updateUser({ password: newPass });
+    if (error) throw error;
+    showToast("Password updated successfully!");
+    document.querySelector("#settings-password-form")?.reset();
+  } catch (err) {
+    showToast(err.message || "Failed to update password");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Update Password";
+  }
+});
+
+// Sign out buttons
+document.querySelector("#settings-signout")?.addEventListener("click", async () => {
+  if (currentUser) {
+    await supabaseClient.auth.signOut();
+    showToast("Signed out successfully");
+  } else {
+    showToast("You are already signed out");
+  }
+});
+
+document.querySelector("#settings-signout-all")?.addEventListener("click", async () => {
+  if (!currentUser) {
+    showToast("You are already signed out");
+    return;
+  }
+  try {
+    await supabaseClient.auth.signOut({ scope: "global" });
+    showToast("Logged out of all sessions across all devices");
+  } catch (err) {
+    showToast(err.message || "Could not log out of all sessions");
+  }
+});
+
+// Delete account
+document.querySelector("#settings-delete-account")?.addEventListener("click", async () => {
+  if (!currentUser) {
+    showToast("You must be signed in to delete your account");
+    return;
+  }
+  const confirmed = confirm("Are you sure you want to permanently delete your account and all your stories? This action cannot be undone.");
+  if (!confirmed) return;
+
+  try {
+    showToast("Deleting account data...");
+    await supabaseClient.from("posts").delete().eq("author_id", currentUser.id);
+    await supabaseClient.from("profiles").delete().eq("id", currentUser.id);
+    await supabaseClient.auth.signOut();
+    localStorage.removeItem("dairy-settings");
+    localStorage.removeItem("dairy-composer-draft");
+    showToast("Account deleted successfully");
+    location.hash = "feed";
+    location.reload();
+  } catch (err) {
+    showToast(err.message || "Could not delete account");
+  }
+});
 document.querySelectorAll(".profile-tab").forEach((tab) => tab.addEventListener("click", () => {
   document.querySelectorAll(".profile-tab").forEach((t) => { t.classList.toggle("active", t === tab); t.setAttribute("aria-selected", t === tab ? "true" : "false"); });
   const grid = document.querySelector("#profile-grid");
@@ -711,12 +1217,30 @@ authForm?.addEventListener("submit", async (event) => {
 });
 document.querySelector("#theme-toggle")?.addEventListener("click", () => {
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-  document.documentElement.setAttribute("data-theme", isDark ? "light" : "dark");
-  localStorage.setItem("dairy-theme", isDark ? "light" : "dark");
+  const newTheme = isDark ? "light" : "dark";
+  state.settings.theme = newTheme;
+  applyTheme(newTheme);
+  const themeSelect = document.querySelector("#setting-theme");
+  if (themeSelect) themeSelect.value = newTheme;
+  localStorage.setItem("dairy-settings", JSON.stringify(state.settings));
 });
-if (localStorage.getItem("dairy-theme") === "dark" || (!localStorage.getItem("dairy-theme") && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
-  document.documentElement.setAttribute("data-theme", "dark");
+
+// Restore drafts and composer memory if enabled
+if (state.settings.autoSaveDrafts) {
+  const savedDraft = localStorage.getItem("dairy-composer-draft");
+  if (savedDraft && storyInput && !storyInput.value) {
+    storyInput.value = savedDraft;
+  }
 }
+if (state.settings.rememberComposerMeta) {
+  const savedFeeling = localStorage.getItem("dairy-composer-feeling");
+  const savedPlace = localStorage.getItem("dairy-composer-place");
+  const feelingInput = document.querySelector("#feeling");
+  const placeInput = document.querySelector("#place");
+  if (savedFeeling && feelingInput) feelingInput.value = savedFeeling;
+  if (savedPlace && placeInput) placeInput.value = savedPlace;
+}
+loadSettingsUi();
 supabaseClient?.auth.getSession().then(({ data }) => {
   currentUser = data.session?.user || null;
   updateAuthUi();
@@ -739,9 +1263,9 @@ supabaseClient?.auth.onAuthStateChange((_event, session) => {
 });
 document.querySelector("#your-story")?.addEventListener("click", () => {
   if (!currentUser) return openAuth();
-  document.querySelector("#story-modal").classList.add("open");
+  document.querySelector("#story-modal")?.classList.add("open");
 });
-document.querySelector("#story-cancel")?.addEventListener("click", () => document.querySelector("#story-modal").classList.remove("open"));
+document.querySelector("#story-cancel")?.addEventListener("click", () => document.querySelector("#story-modal")?.classList.remove("open"));
 document.querySelector("#story-share")?.addEventListener("click", createStory);
 document.querySelector("#story-close")?.addEventListener("click", closeStoryViewer);
 document.addEventListener("keydown", (event) => {
