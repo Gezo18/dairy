@@ -1,0 +1,6 @@
+{
+  "name": "Dairy",
+  "description": "A friendly place to share the stories that make up your day.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

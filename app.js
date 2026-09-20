@@ -21,13 +21,61 @@ function readStorage(key, fallback) {
   }
 }
 
+const defaultSettings = {
+  name: "You",
+  bio: "",
+  audience: "Public",
+  theme: "system",
+  fontSize: "standard",
+  feedView: "cards",
+  autoSaveDrafts: true,
+  rememberComposerMeta: true,
+  dmPrivacy: "everyone",
+  commentPrivacy: "everyone",
+  discoverable: true,
+  notifyReplies: true,
+  notifyLikes: true,
+  notifyMessages: true,
+  notifyFollows: true
+};
+
 const state = {
   stories: [],
   saved: Array.isArray(readStorage("dairy-saved", [])) ? readStorage("dairy-saved", []) : [],
   follows: Array.isArray(readStorage("dairy-follows", [])) ? readStorage("dairy-follows", []) : [],
-  settings: { name: "You", audience: "Public", notifications: true, ...readStorage("dairy-settings", {}) },
+  settings: { ...defaultSettings, ...readStorage("dairy-settings", {}) },
   profiles: new Map()
 };
+
+function applyTheme(theme) {
+  if (theme === "dark") {
+    document.documentElement.setAttribute("data-theme", "dark");
+  } else if (theme === "light") {
+    document.documentElement.removeAttribute("data-theme");
+  } else {
+    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      document.documentElement.setAttribute("data-theme", "dark");
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+  }
+}
+
+function applyFontSize(size) {
+  if (size === "compact" || size === "comfortable") {
+    document.documentElement.setAttribute("data-font-size", size);
+  } else {
+    document.documentElement.removeAttribute("data-font-size");
+  }
+}
+
+function applyFeedView(view) {
+  if (view === "compact") {
+    document.documentElement.setAttribute("data-feed-view", "compact");
+  } else {
+    document.documentElement.removeAttribute("data-feed-view");
+  }
+}
 
 function showToast(message) { const toast = document.createElement("div"); toast.className = "toast"; toast.textContent = message; document.body.append(toast); setTimeout(() => toast.remove(), 2400); }
 function formatDate(value) { return value ? new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "Today"; }
@@ -562,13 +610,26 @@ storyForm?.addEventListener("submit", async (event) => {
     renderStory(story);
     renderViews();
     storyInput.value = "";
+    localStorage.removeItem("dairy-composer-draft");
+    if (state.settings.rememberComposerMeta) {
+      const feelingVal = document.querySelector("#feeling")?.value;
+      const placeVal = document.querySelector("#place")?.value;
+      if (feelingVal) localStorage.setItem("dairy-composer-feeling", feelingVal);
+      if (placeVal) localStorage.setItem("dairy-composer-place", placeVal);
+    }
     document.querySelector("#media-files").value = "";
     document.querySelector("#media-preview").replaceChildren();
   } catch (error) {
-    window.alert(error.message);
+    showToast(error.message || "Could not publish story");
   } finally {
     button.disabled = false;
     button.textContent = "Share story";
+  }
+});
+
+storyInput?.addEventListener("input", () => {
+  if (state.settings.autoSaveDrafts) {
+    localStorage.setItem("dairy-composer-draft", storyInput.value);
   }
 });
 
@@ -645,36 +706,281 @@ async function uploadAvatar(file) {
   state.profiles.set(currentUser.id, { ...state.profiles.get(currentUser.id), avatar_url: avatarUrl });
   return avatarUrl;
 }
-document.querySelector("#setting-name").value = state.settings.name;
-document.querySelector("#setting-audience").value = state.settings.audience;
-document.querySelector("#setting-notifications").checked = state.settings.notifications;
-document.querySelector("#setting-bio").value = state.settings.bio || "";
+function loadSettingsUi() {
+  const s = state.settings;
+  const setVal = (id, val) => { const el = document.querySelector(id); if (el && val !== undefined) el.value = val; };
+  const setCheck = (id, val) => { const el = document.querySelector(id); if (el && val !== undefined) el.checked = Boolean(val); };
+
+  setVal("#setting-name", s.name || "");
+  setVal("#setting-email", currentUser?.email || "");
+  setVal("#setting-bio", s.bio || "");
+  setVal("#setting-audience", s.audience || "Public");
+  setVal("#setting-theme", s.theme || "system");
+  setVal("#setting-fontsize", s.fontSize || "standard");
+  setVal("#setting-feedview", s.feedView || "cards");
+  setCheck("#setting-autosave", s.autoSaveDrafts !== false);
+  setCheck("#setting-remembermeta", s.rememberComposerMeta !== false);
+  setVal("#setting-dmprivacy", s.dmPrivacy || "everyone");
+  setVal("#setting-commentprivacy", s.commentPrivacy || "everyone");
+  setCheck("#setting-discoverable", s.discoverable !== false);
+  setCheck("#setting-notify-replies", s.notifyReplies !== false);
+  setCheck("#setting-notify-likes", s.notifyLikes !== false);
+  setCheck("#setting-notify-messages", s.notifyMessages !== false);
+  setCheck("#setting-notify-follows", s.notifyFollows !== false);
+
+  applyTheme(s.theme || "system");
+  applyFontSize(s.fontSize || "standard");
+  applyFeedView(s.feedView || "cards");
+}
+
+// Live preview when changing appearance dropdowns
+document.querySelector("#setting-theme")?.addEventListener("change", (e) => {
+  applyTheme(e.target.value);
+});
+document.querySelector("#setting-fontsize")?.addEventListener("change", (e) => {
+  applyFontSize(e.target.value);
+});
+document.querySelector("#setting-feedview")?.addEventListener("change", (e) => {
+  applyFeedView(e.target.value);
+});
+
+// Settings form submission
 document.querySelector("#settings-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const fileInput = document.querySelector("#setting-avatar");
-  const button = document.querySelector("#settings-form button[type=submit]");
-  button.disabled = true;
+  const button = document.querySelector("#settings-save-btn");
+  const statusEl = document.querySelector("#settings-status");
+  if (button) button.disabled = true;
+  if (statusEl) statusEl.textContent = "Saving preferences...";
+
   try {
     if (fileInput?.files?.[0]) {
       await uploadAvatar(fileInput.files[0]);
       showToast("Profile picture updated");
     }
-    const bio = document.querySelector("#setting-bio").value.trim();
-    const updates = { display_name: document.querySelector("#setting-name").value.trim() || "You", bio: bio || "" };
-    const { error: profileError } = await supabaseClient.from("profiles").update(updates).eq("id", currentUser.id);
-    if (profileError) throw profileError;
-    state.settings = { name: updates.display_name, audience: document.querySelector("#setting-audience").value, notifications: document.querySelector("#setting-notifications").checked, bio: updates.bio };
+
+    const name = document.querySelector("#setting-name")?.value.trim() || "You";
+    const bio = document.querySelector("#setting-bio")?.value.trim() || "";
+    const audience = document.querySelector("#setting-audience")?.value || "Public";
+    const theme = document.querySelector("#setting-theme")?.value || "system";
+    const fontSize = document.querySelector("#setting-fontsize")?.value || "standard";
+    const feedView = document.querySelector("#setting-feedview")?.value || "cards";
+    const autoSaveDrafts = Boolean(document.querySelector("#setting-autosave")?.checked);
+    const rememberComposerMeta = Boolean(document.querySelector("#setting-remembermeta")?.checked);
+    const dmPrivacy = document.querySelector("#setting-dmprivacy")?.value || "everyone";
+    const commentPrivacy = document.querySelector("#setting-commentprivacy")?.value || "everyone";
+    const discoverable = Boolean(document.querySelector("#setting-discoverable")?.checked);
+    const notifyReplies = Boolean(document.querySelector("#setting-notify-replies")?.checked);
+    const notifyLikes = Boolean(document.querySelector("#setting-notify-likes")?.checked);
+    const notifyMessages = Boolean(document.querySelector("#setting-notify-messages")?.checked);
+    const notifyFollows = Boolean(document.querySelector("#setting-notify-follows")?.checked);
+
+    state.settings = {
+      name,
+      bio,
+      audience,
+      theme,
+      fontSize,
+      feedView,
+      autoSaveDrafts,
+      rememberComposerMeta,
+      dmPrivacy,
+      commentPrivacy,
+      discoverable,
+      notifyReplies,
+      notifyLikes,
+      notifyMessages,
+      notifyFollows
+    };
     localStorage.setItem("dairy-settings", JSON.stringify(state.settings));
-    showToast("Settings saved");
+
+    applyTheme(theme);
+    applyFontSize(fontSize);
+    applyFeedView(feedView);
+
+    if (currentUser) {
+      const updates = { display_name: name, bio };
+      const { error: profileError } = await supabaseClient.from("profiles").update(updates).eq("id", currentUser.id);
+      if (profileError) console.warn("Supabase profile update warning:", profileError);
+    }
+
+    showToast("Settings saved successfully");
+    if (statusEl) {
+      statusEl.textContent = "Saved";
+      setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 3000);
+    }
     renderViews();
     renderProfile();
   } catch (error) {
-    showToast(error.message || "Could not update profile");
+    showToast(error.message || "Could not update settings");
+    if (statusEl) statusEl.textContent = "";
   } finally {
-    button.disabled = false;
+    if (button) button.disabled = false;
   }
 });
-document.querySelector("#settings-signout")?.addEventListener("click", async () => { if (currentUser) await supabaseClient.auth.signOut(); else showToast("You are already signed out"); });
+
+// Export stories
+function exportDiary(format = "json") {
+  const myStories = state.stories.filter(
+    (story) => (story.author?.id === currentUser?.id) || ((story.author?.name || story.author) === state.settings.name)
+  );
+  const storiesToExport = myStories.length ? myStories : state.stories;
+
+  if (!storiesToExport.length) {
+    showToast("No stories to export yet. Write a story first!");
+    return;
+  }
+
+  const nowStr = new Date().toISOString().slice(0, 10);
+  let blob, filename;
+
+  if (format === "json") {
+    const data = {
+      generator: "Dairy (https://github.com/Gezo18/dairy)",
+      exportedAt: new Date().toISOString(),
+      author: {
+        name: state.settings.name,
+        email: currentUser?.email || "anonymous",
+        bio: state.settings.bio || ""
+      },
+      storyCount: storiesToExport.length,
+      stories: storiesToExport.map((s) => ({
+        id: s.id,
+        createdAt: s.createdAt,
+        text: s.text,
+        feeling: s.feeling || "",
+        place: s.place || "",
+        audience: s.audience,
+        likes: s.likes || 0,
+        comments: s.comments || 0,
+        media: s.media || []
+      }))
+    };
+    blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json;charset=utf-8" });
+    filename = `dairy-stories-${nowStr}.json`;
+  } else {
+    let md = `# Dairy Journal - ${state.settings.name}\n\n`;
+    md += `*Exported on ${new Date().toLocaleDateString()} (${storiesToExport.length} stories)*\n\n`;
+    if (state.settings.bio) md += `> ${state.settings.bio}\n\n`;
+    md += `---\n\n`;
+
+    storiesToExport.forEach((s, idx) => {
+      md += `## ${idx + 1}. ${formatDate(s.createdAt)}\n\n`;
+      const meta = [s.feeling ? `Feeling: ${s.feeling}` : "", s.place ? `Location: ${s.place}` : "", `Audience: ${s.audience}`].filter(Boolean);
+      if (meta.length) md += `*${meta.join(" · ")}*\n\n`;
+      md += `${s.text}\n\n`;
+      if (s.media && s.media.length) {
+        s.media.forEach((m) => {
+          if (m.type === "video") {
+            md += `[Video Link](${m.url})\n\n`;
+          } else {
+            md += `![Image](${m.url})\n\n`;
+          }
+        });
+      }
+      md += `❤️ ${s.likes || 0} likes · 💬 ${s.comments || 0} comments\n\n---\n\n`;
+    });
+
+    blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+    filename = `dairy-journal-${nowStr}.md`;
+  }
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast(`Exported ${storiesToExport.length} stories as ${format.toUpperCase()}`);
+}
+
+document.querySelector("#setting-export-json")?.addEventListener("click", () => exportDiary("json"));
+document.querySelector("#setting-export-md")?.addEventListener("click", () => exportDiary("markdown"));
+
+// Password Change
+document.querySelector("#settings-password-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!currentUser) {
+    showToast("Please sign in first to change password");
+    openAuth();
+    return;
+  }
+  const newPass = document.querySelector("#setting-newpassword")?.value;
+  const confirmPass = document.querySelector("#setting-confirmpassword")?.value;
+  const btn = document.querySelector("#setting-password-btn");
+
+  if (!newPass || newPass.length < 8) {
+    showToast("Password must be at least 8 characters");
+    return;
+  }
+  if (newPass !== confirmPass) {
+    showToast("Passwords do not match");
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Updating...";
+  try {
+    const { error } = await supabaseClient.auth.updateUser({ password: newPass });
+    if (error) throw error;
+    showToast("Password updated successfully!");
+    document.querySelector("#settings-password-form")?.reset();
+  } catch (err) {
+    showToast(err.message || "Failed to update password");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Update Password";
+  }
+});
+
+// Sign out buttons
+document.querySelector("#settings-signout")?.addEventListener("click", async () => {
+  if (currentUser) {
+    await supabaseClient.auth.signOut();
+    showToast("Signed out successfully");
+  } else {
+    showToast("You are already signed out");
+  }
+});
+
+document.querySelector("#settings-signout-all")?.addEventListener("click", async () => {
+  if (!currentUser) {
+    showToast("You are already signed out");
+    return;
+  }
+  try {
+    await supabaseClient.auth.signOut({ scope: "global" });
+    showToast("Logged out of all sessions across all devices");
+  } catch (err) {
+    showToast(err.message || "Could not log out of all sessions");
+  }
+});
+
+// Delete account
+document.querySelector("#settings-delete-account")?.addEventListener("click", async () => {
+  if (!currentUser) {
+    showToast("You must be signed in to delete your account");
+    return;
+  }
+  const confirmed = confirm("Are you sure you want to permanently delete your account and all your stories? This action cannot be undone.");
+  if (!confirmed) return;
+
+  try {
+    showToast("Deleting account data...");
+    await supabaseClient.from("posts").delete().eq("author_id", currentUser.id);
+    await supabaseClient.from("profiles").delete().eq("id", currentUser.id);
+    await supabaseClient.auth.signOut();
+    localStorage.removeItem("dairy-settings");
+    localStorage.removeItem("dairy-composer-draft");
+    showToast("Account deleted successfully");
+    location.hash = "feed";
+    location.reload();
+  } catch (err) {
+    showToast(err.message || "Could not delete account");
+  }
+});
 document.querySelectorAll(".profile-tab").forEach((tab) => tab.addEventListener("click", () => {
   document.querySelectorAll(".profile-tab").forEach((t) => { t.classList.toggle("active", t === tab); t.setAttribute("aria-selected", t === tab ? "true" : "false"); });
   const grid = document.querySelector("#profile-grid");
@@ -728,12 +1034,30 @@ authForm?.addEventListener("submit", async (event) => {
 });
 document.querySelector("#theme-toggle")?.addEventListener("click", () => {
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-  document.documentElement.setAttribute("data-theme", isDark ? "light" : "dark");
-  localStorage.setItem("dairy-theme", isDark ? "light" : "dark");
+  const newTheme = isDark ? "light" : "dark";
+  state.settings.theme = newTheme;
+  applyTheme(newTheme);
+  const themeSelect = document.querySelector("#setting-theme");
+  if (themeSelect) themeSelect.value = newTheme;
+  localStorage.setItem("dairy-settings", JSON.stringify(state.settings));
 });
-if (localStorage.getItem("dairy-theme") === "dark" || (!localStorage.getItem("dairy-theme") && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
-  document.documentElement.setAttribute("data-theme", "dark");
+
+// Restore drafts and composer memory if enabled
+if (state.settings.autoSaveDrafts) {
+  const savedDraft = localStorage.getItem("dairy-composer-draft");
+  if (savedDraft && storyInput && !storyInput.value) {
+    storyInput.value = savedDraft;
+  }
 }
+if (state.settings.rememberComposerMeta) {
+  const savedFeeling = localStorage.getItem("dairy-composer-feeling");
+  const savedPlace = localStorage.getItem("dairy-composer-place");
+  const feelingInput = document.querySelector("#feeling");
+  const placeInput = document.querySelector("#place");
+  if (savedFeeling && feelingInput) feelingInput.value = savedFeeling;
+  if (savedPlace && placeInput) placeInput.value = savedPlace;
+}
+loadSettingsUi();
 supabaseClient?.auth.getSession().then(({ data }) => {
   currentUser = data.session?.user || null;
   updateAuthUi();
