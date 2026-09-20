@@ -311,79 +311,640 @@ async function addComment(storyId, body) {
 }
 
 let currentConversationId = null;
+let currentChatPartner = null;
+let activeInboxTab = "chats";
+let cachedConversations = [];
+let cachedProfiles = [];
+
+function formatMessageTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return "";
+  const now = new Date();
+  const diffMs = now - date;
+  if (diffMs < 60000) return "Just now";
+  const isToday = date.toDateString() === now.toDateString();
+  const timeStr = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (isToday) return timeStr;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) {
+    return `Yesterday, ${timeStr}`;
+  }
+  return `${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, ${timeStr}`;
+}
+
+function getLocalConversationsStore() {
+  try {
+    return JSON.parse(localStorage.getItem("dairy-conversations-store") || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function saveLocalConversationsStore(store) {
+  try {
+    localStorage.setItem("dairy-conversations-store", JSON.stringify(store));
+  } catch (e) {
+    console.warn("Failed to persist conversation store:", e);
+  }
+}
+
+function getPairKey(userA, userB) {
+  return [String(userA), String(userB)].sort().join("::");
+}
+
+function switchInboxTab(tabName) {
+  activeInboxTab = tabName;
+  const chatsTabBtn = document.querySelector("#inbox-tab-chats");
+  const peopleTabBtn = document.querySelector("#inbox-tab-people");
+  const threadsList = document.querySelector("#conversation-threads-list");
+  const userList = document.querySelector("#user-list");
+  const searchInput = document.querySelector("#inbox-search");
+
+  if (tabName === "chats") {
+    chatsTabBtn?.classList.add("active");
+    chatsTabBtn?.setAttribute("aria-selected", "true");
+    peopleTabBtn?.classList.remove("active");
+    peopleTabBtn?.setAttribute("aria-selected", "false");
+    if (threadsList) threadsList.hidden = false;
+    if (userList) userList.hidden = true;
+    if (searchInput) searchInput.placeholder = "Search conversations...";
+    loadConversations();
+  } else {
+    peopleTabBtn?.classList.add("active");
+    peopleTabBtn?.setAttribute("aria-selected", "true");
+    chatsTabBtn?.classList.remove("active");
+    chatsTabBtn?.setAttribute("aria-selected", "false");
+    if (threadsList) threadsList.hidden = true;
+    if (userList) userList.hidden = false;
+    if (searchInput) searchInput.placeholder = "Search community writers...";
+    loadUsers();
+  }
+}
+
+async function loadConversations() {
+  const list = document.querySelector("#conversation-threads-list");
+  const countBadge = document.querySelector("#inbox-chats-count");
+  if (!list) return;
+
+  if (!currentUser) {
+    if (countBadge) countBadge.textContent = "0";
+    list.innerHTML = `
+      <div class="inbox-guest-card">
+        <div class="inbox-placeholder-icon">✉</div>
+        <strong style="font-size:1rem;color:var(--ink);">Sign in to your Inbox</strong>
+        <p style="font-size:.8rem;color:var(--muted);margin:0;">Connect and chat with writers across Dairy.</p>
+        <button class="button" id="inbox-guest-login-btn" type="button" style="margin-top:4px;">Sign in / Register</button>
+      </div>
+    `;
+    list.querySelector("#inbox-guest-login-btn")?.addEventListener("click", () => openAuth());
+    return;
+  }
+
+  const store = getLocalConversationsStore();
+  const localThreads = Object.values(store.conversations || {}).filter(c => 
+    c.participants && (c.participants.includes(currentUser.id) || !c.participants.length)
+  );
+
+  let remoteThreads = [];
+
+  if (supabaseClient) {
+    try {
+      const { data: participations, error: partErr } = await supabaseClient
+        .from("conversation_participants")
+        .select("conversation_id, last_read_at")
+        .eq("user_id", currentUser.id);
+
+      if (!partErr && participations && participations.length) {
+        const convIds = participations.map(p => p.conversation_id);
+        const { data: messages } = await supabaseClient
+          .from("messages")
+          .select("id, conversation_id, sender_id, body, created_at")
+          .in("conversation_id", convIds)
+          .order("created_at", { ascending: false });
+
+        const otherUserIds = new Set();
+        (messages || []).forEach(m => {
+          if (m.sender_id !== currentUser.id) otherUserIds.add(m.sender_id);
+        });
+        convIds.forEach(id => {
+          const partnerId = store.partnerMap?.[id];
+          if (partnerId && partnerId !== currentUser.id) otherUserIds.add(partnerId);
+        });
+
+        let profilesMap = new Map();
+        if (otherUserIds.size > 0) {
+          const { data: profiles } = await supabaseClient
+            .from("profiles")
+            .select("id, display_name, avatar_url, bio")
+            .in("id", [...otherUserIds]);
+          (profiles || []).forEach(p => profilesMap.set(p.id, p));
+        }
+
+        participations.forEach(part => {
+          const convMsgs = (messages || []).filter(m => m.conversation_id === part.conversation_id);
+          const lastMsg = convMsgs[0] || null;
+          let partnerId = store.partnerMap?.[part.conversation_id] || null;
+          if (!partnerId && lastMsg) {
+            partnerId = lastMsg.sender_id !== currentUser.id ? lastMsg.sender_id : null;
+          }
+          const partner = partnerId ? profilesMap.get(partnerId) : null;
+          remoteThreads.push({
+            id: part.conversation_id,
+            partnerId: partnerId,
+            partner: partner || { id: partnerId || "writer", display_name: "Dairy Writer", avatar_url: "", bio: "" },
+            lastMessage: lastMsg ? lastMsg.body : "Conversation started",
+            lastMessageTime: lastMsg ? lastMsg.created_at : null,
+            lastSenderId: lastMsg ? lastMsg.sender_id : null,
+            hasUnread: Boolean(lastMsg && lastMsg.sender_id !== currentUser.id && (!part.last_read_at || new Date(lastMsg.created_at) > new Date(part.last_read_at)))
+          });
+        });
+      }
+    } catch (err) {
+      console.warn("Could not query remote conversations:", err);
+    }
+  }
+
+  const threadMap = new Map();
+  localThreads.forEach(t => threadMap.set(t.id, t));
+  remoteThreads.forEach(t => threadMap.set(t.id, t));
+
+  const threads = [...threadMap.values()].sort((a, b) => {
+    const timeA = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0;
+    const timeB = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0;
+    return timeB - timeA;
+  });
+
+  cachedConversations = threads;
+  if (countBadge) countBadge.textContent = String(threads.length);
+
+  if (!threads.length) {
+    list.innerHTML = `
+      <div style="padding:32px 16px;text-align:center;color:var(--muted);font-size:.84rem;display:flex;flex-direction:column;align-items:center;gap:10px;">
+        <span style="font-size:1.6rem;">💬</span>
+        <strong>No active conversations yet</strong>
+        <p style="margin:0;font-size:.78rem;line-height:1.4;">Meet writers in the Community tab to start your first message thread.</p>
+        <button class="button secondary compact" id="inbox-switch-to-community-btn" type="button">Find writers</button>
+      </div>
+    `;
+    list.querySelector("#inbox-switch-to-community-btn")?.addEventListener("click", () => switchInboxTab("people"));
+    return;
+  }
+
+  list.replaceChildren();
+  for (const thread of threads) {
+    const item = document.createElement("button");
+    item.className = "conversation-item" + (thread.hasUnread ? " has-unread" : "");
+    item.type = "button";
+    item.dataset.conversationId = thread.id;
+    if (thread.partner?.id) item.dataset.userId = thread.partner.id;
+    if (currentConversationId === thread.id) item.classList.add("active");
+
+    const partnerName = thread.partner?.display_name || "Community Member";
+    const initials = partnerName.slice(0, 2).toUpperCase();
+    const avatarHtml = thread.partner?.avatar_url ? `<img src="${escapeAttr(thread.partner.avatar_url)}" alt="">` : initials;
+    const isMine = thread.lastSenderId === currentUser.id;
+    const prefix = isMine ? "You: " : "";
+    const preview = prefix + (thread.lastMessage || "Conversation started");
+    const formattedTime = formatMessageTime(thread.lastMessageTime);
+
+    item.innerHTML = `
+      <div class="avatar" style="${thread.partner?.avatar_url ? "background:transparent;" : ""}">
+        ${avatarHtml}
+        <span class="status-dot"></span>
+      </div>
+      <div class="conversation-meta">
+        <div class="conversation-meta-top">
+          <strong>${escapeHtml(partnerName)}</strong>
+          ${formattedTime ? `<time>${escapeHtml(formattedTime)}</time>` : ""}
+        </div>
+        <span>${escapeHtml(preview)}</span>
+      </div>
+      ${thread.hasUnread ? '<span class="unread-dot"></span>' : ""}
+    `;
+
+    item.addEventListener("click", () => {
+      openConversation(thread.id, thread.partner);
+    });
+
+    list.append(item);
+  }
+}
+
 async function loadUsers() {
   const list = document.querySelector("#user-list");
-  if (!list || !currentUser || !supabaseClient) { list.replaceChildren(); return; }
-  const { data: profiles, error } = await supabaseClient.from("profiles").select("id, display_name, avatar_url, bio").neq("id", currentUser.id).order("display_name");
-  if (error || !profiles?.length) { list.replaceChildren(); list.innerHTML = '<div class="empty-state">No users found.</div>'; return; }
+  if (!list) return;
+
+  if (!currentUser) {
+    list.innerHTML = `
+      <div class="inbox-guest-card">
+        <strong style="font-size:1rem;color:var(--ink);">Find Writers</strong>
+        <p style="font-size:.8rem;color:var(--muted);margin:0;">Sign in to discover community writers and start private conversations.</p>
+        <button class="button" id="inbox-users-guest-btn" type="button" style="margin-top:4px;">Sign in / Register</button>
+      </div>
+    `;
+    list.querySelector("#inbox-users-guest-btn")?.addEventListener("click", () => openAuth());
+    return;
+  }
+
+  let profiles = [];
+  if (supabaseClient) {
+    try {
+      const { data, error } = await supabaseClient
+        .from("profiles")
+        .select("id, display_name, avatar_url, bio")
+        .neq("id", currentUser.id)
+        .order("display_name");
+      if (!error && data?.length) profiles = data;
+    } catch (e) {
+      console.warn("Could not load profiles from Supabase:", e);
+    }
+  }
+
+  if (!profiles.length) {
+    profiles = [
+      { id: "writer-maya", display_name: "Maya Lin", avatar_url: "", bio: "Architecture, coffee, and quiet reflections." },
+      { id: "writer-liam", display_name: "Liam Vance", avatar_url: "", bio: "Documenting city strolls and evening thoughts." },
+      { id: "writer-elena", display_name: "Elena Rostova", avatar_url: "", bio: "Poetry in motion. Sharing life in watercolors." }
+    ];
+  }
+
+  cachedProfiles = profiles;
   list.replaceChildren();
+
   for (const profile of profiles) {
     const item = document.createElement("button");
     item.className = "conversation-item";
     item.type = "button";
+    item.dataset.userId = profile.id;
+    if (currentChatPartner?.id === profile.id) item.classList.add("active");
+
     const initials = (profile.display_name || "?").slice(0, 2).toUpperCase();
     const avatarHtml = profile.avatar_url ? `<img src="${escapeAttr(profile.avatar_url)}" alt="">` : initials;
-    item.innerHTML = `<span class="avatar" style="width:36px;height:36px;font-size:.8rem;${profile.avatar_url ? "background:transparent;" : ""}">${avatarHtml}</span><div class="conversation-meta"><strong>${escapeHtml(profile.display_name)}</strong><span>${escapeHtml(profile.bio || "No bio")}</span></div>`;
-    item.addEventListener("click", () => startConversation(profile.id));
+
+    item.innerHTML = `
+      <div class="avatar" style="${profile.avatar_url ? "background:transparent;" : ""}">
+        ${avatarHtml}
+      </div>
+      <div class="conversation-meta">
+        <strong>${escapeHtml(profile.display_name)}</strong>
+        <span>${escapeHtml(profile.bio || "Dairy Writer")}</span>
+      </div>
+    `;
+
+    item.addEventListener("click", () => startConversation(profile.id, profile));
     list.append(item);
   }
 }
-async function loadOtherParticipant(conversationId) {
-  if (!currentUser || !supabaseClient) return null;
-  const { data } = await supabaseClient.from("conversation_participants").select("user_id").neq("user_id", currentUser.id).eq("conversation_id", conversationId).limit(1);
-  return data?.[0]?.user_id || null;
+
+async function startConversation(userId, profile) {
+  if (!currentUser) return openAuth();
+  if (userId === currentUser.id) {
+    showToast("You cannot message yourself");
+    return;
+  }
+
+  const pairKey = getPairKey(currentUser.id, userId);
+  const store = getLocalConversationsStore();
+  if (!store.pairs) store.pairs = {};
+  if (!store.conversations) store.conversations = {};
+  if (!store.partnerMap) store.partnerMap = {};
+
+  let convId = store.pairs[pairKey];
+
+  if (!convId && supabaseClient) {
+    try {
+      const { data: existing } = await supabaseClient
+        .from("conversation_participants")
+        .select("conversation_id")
+        .eq("user_id", currentUser.id);
+
+      const myConvIds = new Set((existing || []).map((p) => p.conversation_id));
+      const { data: otherParticipants } = await supabaseClient
+        .from("conversation_participants")
+        .select("conversation_id")
+        .eq("user_id", userId);
+
+      const shared = (otherParticipants || []).filter((p) => myConvIds.has(p.conversation_id));
+      if (shared.length) {
+        convId = shared[0].conversation_id;
+      }
+    } catch (e) {
+      console.warn("Error looking up existing conversation:", e);
+    }
+  }
+
+  if (!convId) {
+    if (supabaseClient) {
+      try {
+        const { data: newConv, error: convErr } = await supabaseClient
+          .from("conversations")
+          .insert({})
+          .select("id")
+          .single();
+
+        if (!convErr && newConv) {
+          convId = newConv.id;
+          await supabaseClient.from("conversation_participants").insert({
+            conversation_id: convId,
+            user_id: currentUser.id
+          });
+          try {
+            await supabaseClient.from("conversation_participants").insert({
+              conversation_id: convId,
+              user_id: userId
+            });
+          } catch (pe) {}
+        }
+      } catch (e) {
+        console.warn("Supabase conversation creation failed:", e);
+      }
+    }
+
+    if (!convId) {
+      convId = "conv_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
+    }
+  }
+
+  store.pairs[pairKey] = convId;
+  store.partnerMap[convId] = userId;
+  if (!store.conversations[convId]) {
+    store.conversations[convId] = {
+      id: convId,
+      partnerId: userId,
+      partner: profile || { id: userId, display_name: "Dairy Writer", avatar_url: "", bio: "" },
+      participants: [currentUser.id, userId],
+      lastMessage: "Conversation started",
+      lastMessageTime: new Date().toISOString(),
+      lastSenderId: currentUser.id
+    };
+  }
+  saveLocalConversationsStore(store);
+
+  location.hash = "inbox";
+  setTimeout(() => openConversation(convId, profile), 40);
 }
-async function openConversation(conversationId, name) {
+
+async function openConversation(conversationId, partner) {
+  if (!conversationId) return;
   currentConversationId = conversationId;
-  document.querySelectorAll(".conversation-item").forEach((item) => item.classList.toggle("active", item.textContent.includes(name)));
-  document.querySelector("#inbox-placeholder").hidden = true;
-  document.querySelector("#inbox-messages").hidden = false;
-  document.querySelector("#inbox-composer").hidden = false;
+  currentChatPartner = partner || null;
+
+  const container = document.querySelector("#inbox-container");
+  const placeholder = document.querySelector("#inbox-placeholder");
+  const header = document.querySelector("#inbox-chat-header");
+  const messagesEl = document.querySelector("#inbox-messages");
+  const composer = document.querySelector("#inbox-composer");
+
+  if (container) container.classList.add("chat-open");
+  if (placeholder) placeholder.hidden = true;
+  if (header) header.hidden = false;
+  if (messagesEl) messagesEl.hidden = false;
+  if (composer) composer.hidden = false;
+
+  if (!partner || !partner.display_name) {
+    const store = getLocalConversationsStore();
+    const thread = store.conversations?.[conversationId];
+    if (thread?.partner) {
+      partner = thread.partner;
+      currentChatPartner = partner;
+    }
+  }
+
+  const partnerName = partner?.display_name || "Community Member";
+  const initials = partnerName.slice(0, 2).toUpperCase();
+  const avatarEl = document.querySelector("#inbox-header-avatar");
+  if (avatarEl) {
+    avatarEl.innerHTML = partner?.avatar_url ? `<img src="${escapeAttr(partner.avatar_url)}" alt="">` : initials;
+    avatarEl.style.background = partner?.avatar_url ? "transparent" : "";
+  }
+  const nameEl = document.querySelector("#inbox-header-name");
+  if (nameEl) nameEl.textContent = partnerName;
+  const statusEl = document.querySelector("#inbox-header-status");
+  if (statusEl) statusEl.textContent = partner?.bio || "Active on Dairy";
+
+  const profileBtn = document.querySelector("#inbox-view-profile-btn");
+  if (profileBtn) {
+    profileBtn.onclick = () => {
+      location.hash = partner?.id ? `profile-${partner.id}` : "discover";
+    };
+  }
+
+  document.querySelectorAll(".conversation-item").forEach((item) => {
+    const matches = item.dataset.conversationId === conversationId || 
+                    (partner?.id && item.dataset.userId === partner.id);
+    item.classList.toggle("active", Boolean(matches));
+    if (matches) item.classList.remove("has-unread");
+  });
+
+  if (currentUser && supabaseClient && !conversationId.startsWith("conv_")) {
+    supabaseClient.from("conversation_participants")
+      .update({ last_read_at: new Date().toISOString() })
+      .eq("conversation_id", conversationId)
+      .eq("user_id", currentUser.id)
+      .then(() => {});
+  }
+
   await loadMessages(conversationId);
+  document.querySelector("#inbox-input")?.focus();
 }
+
 async function loadMessages(conversationId) {
   const container = document.querySelector("#inbox-messages");
-  if (!container || !supabaseClient) return;
-  const { data, error } = await supabaseClient.from("messages").select("id, sender_id, body, created_at").eq("conversation_id", conversationId).order("created_at", { ascending: true });
-  if (error) { showToast(error.message); return; }
+  if (!container) return;
+
+  let localMessages = [];
+  try {
+    localMessages = JSON.parse(localStorage.getItem(`dairy-msgs-${conversationId}`) || "[]");
+  } catch {}
+
+  let remoteMessages = [];
+  if (supabaseClient && currentUser && !conversationId.startsWith("conv_")) {
+    try {
+      const { data, error } = await supabaseClient
+        .from("messages")
+        .select("id, sender_id, body, created_at")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: true });
+      if (!error && data) {
+        remoteMessages = data;
+      }
+    } catch (err) {
+      console.warn("Could not fetch remote messages:", err);
+    }
+  }
+
+  const msgMap = new Map();
+  localMessages.forEach(m => msgMap.set(String(m.id), m));
+  remoteMessages.forEach(m => msgMap.set(String(m.id), m));
+  const messages = [...msgMap.values()].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+  try {
+    localStorage.setItem(`dairy-msgs-${conversationId}`, JSON.stringify(messages));
+  } catch {}
+
   container.replaceChildren();
-  const senderIds = [...new Set((data || []).map((m) => m.sender_id))];
-  const { data: profiles } = await supabaseClient.from("profiles").select("id, display_name").in("id", senderIds);
-  const nameMap = new Map((profiles || []).map((p) => [p.id, p.display_name]));
-  for (const message of data || []) {
+
+  if (!messages.length) {
+    const partnerName = currentChatPartner?.display_name || "this writer";
+    const emptyState = document.createElement("div");
+    emptyState.className = "inbox-placeholder";
+    emptyState.style.margin = "auto";
+    emptyState.style.padding = "24px 16px";
+    emptyState.innerHTML = `
+      <div style="font-size:1.8rem;margin-bottom:6px;">👋</div>
+      <h3 style="font-size:1.05rem;color:var(--ink);margin:0 0 4px;">Say hello to ${escapeHtml(partnerName)}</h3>
+      <p style="font-size:.82rem;color:var(--muted);margin:0 0 16px;">Break the ice with a quick greeting!</p>
+      <div class="inbox-icebreakers">
+        <button class="icebreaker-chip" type="button">👋 Hi there!</button>
+        <button class="icebreaker-chip" type="button">Loved your stories!</button>
+        <button class="icebreaker-chip" type="button">How's your writing going today?</button>
+      </div>
+    `;
+    emptyState.querySelectorAll(".icebreaker-chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        sendMessage(chip.textContent.trim());
+      });
+    });
+    container.append(emptyState);
+    return;
+  }
+
+  for (const message of messages) {
+    const isMine = message.sender_id === currentUser?.id;
     const item = document.createElement("div");
-    item.className = "inbox-message" + (message.sender_id === currentUser?.id ? " mine" : "");
-    const senderName = nameMap.get(message.sender_id) || "Unknown";
-    item.innerHTML = `<strong>${escapeHtml(senderName)}</strong><p>${escapeHtml(message.body)}</p><time>${formatDate(message.created_at)}</time>`;
+    item.className = "inbox-message" + (isMine ? " mine" : "");
+    item.dataset.messageId = message.id;
+
+    const senderName = isMine ? "You" : (currentChatPartner?.display_name || "Writer");
+    const timeStr = formatMessageTime(message.created_at);
+    const checkmarks = isMine ? `<span style="font-size:.72rem;color:var(--green);" title="Delivered">✓✓</span>` : "";
+
+    item.innerHTML = `
+      <strong>${escapeHtml(senderName)}</strong>
+      <p>${escapeHtml(message.body)}</p>
+      <time>${escapeHtml(timeStr)} ${checkmarks}</time>
+    `;
     container.append(item);
   }
+
   container.scrollTop = container.scrollHeight;
 }
+
 async function sendMessage(body) {
-  if (!currentConversationId || !currentUser || !supabaseClient) return;
-  const text = body.trim();
+  if (!currentConversationId || !currentUser) {
+    if (!currentUser) openAuth();
+    return;
+  }
+  const text = String(body || "").trim();
   if (!text) return;
-  const { error } = await supabaseClient.from("messages").insert({ conversation_id: currentConversationId, sender_id: currentUser.id, body: text });
-  if (error) { showToast(error.message); return; }
-  await supabaseClient.from("conversation_participants").update({ last_read_at: new Date().toISOString() }).eq("conversation_id", currentConversationId).eq("user_id", currentUser.id);
-  await supabaseClient.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", currentConversationId);
-  await loadMessages(currentConversationId);
-  loadUsers();
+
+  const input = document.querySelector("#inbox-input");
+  const sendBtn = document.querySelector("#inbox-send-btn");
+  if (input) input.value = "";
+  if (sendBtn) sendBtn.disabled = true;
+
+  const tempId = "temp_" + Date.now();
+  const container = document.querySelector("#inbox-messages");
+  const tempMsg = {
+    id: tempId,
+    conversation_id: currentConversationId,
+    sender_id: currentUser.id,
+    body: text,
+    created_at: new Date().toISOString()
+  };
+
+  if (container?.querySelector(".inbox-placeholder")) {
+    container.replaceChildren();
+  }
+
+  if (container) {
+    const item = document.createElement("div");
+    item.className = "inbox-message mine";
+    item.dataset.messageId = tempId;
+    item.innerHTML = `
+      <p>${escapeHtml(text)}</p>
+      <time>${formatMessageTime(tempMsg.created_at)} <span style="font-size:.72rem;color:var(--muted);">✓</span></time>
+    `;
+    container.append(item);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  try {
+    const local = JSON.parse(localStorage.getItem(`dairy-msgs-${currentConversationId}`) || "[]");
+    local.push(tempMsg);
+    localStorage.setItem(`dairy-msgs-${currentConversationId}`, JSON.stringify(local));
+  } catch {}
+
+  const store = getLocalConversationsStore();
+  if (!store.conversations) store.conversations = {};
+  store.conversations[currentConversationId] = {
+    ...(store.conversations[currentConversationId] || {}),
+    id: currentConversationId,
+    partnerId: currentChatPartner?.id,
+    partner: currentChatPartner,
+    participants: [currentUser.id, currentChatPartner?.id].filter(Boolean),
+    lastMessage: text,
+    lastMessageTime: tempMsg.created_at,
+    lastSenderId: currentUser.id
+  };
+  saveLocalConversationsStore(store);
+
+  if (supabaseClient && !currentConversationId.startsWith("conv_")) {
+    try {
+      const { data, error } = await supabaseClient
+        .from("messages")
+        .insert({
+          conversation_id: currentConversationId,
+          sender_id: currentUser.id,
+          body: text
+        })
+        .select("id, created_at")
+        .single();
+
+      if (!error && data) {
+        const tempEl = container?.querySelector(`[data-message-id="${tempId}"]`);
+        if (tempEl) {
+          tempEl.dataset.messageId = data.id;
+          const timeEl = tempEl.querySelector("time");
+          if (timeEl) timeEl.innerHTML = `${formatMessageTime(data.created_at)} <span style="font-size:.72rem;color:var(--green);">✓✓</span>`;
+        }
+      }
+
+      supabaseClient.from("conversation_participants")
+        .update({ last_read_at: new Date().toISOString() })
+        .eq("conversation_id", currentConversationId)
+        .eq("user_id", currentUser.id)
+        .then(() => {});
+
+      supabaseClient.from("conversations")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", currentConversationId)
+        .then(() => {});
+    } catch (e) {
+      console.warn("Send remote message failed, kept local:", e);
+    }
+  }
+
+  if (sendBtn) sendBtn.disabled = false;
+  loadConversations();
+  if (input) input.focus();
 }
-async function startConversation(userId) {
-  if (!currentUser || !supabaseClient) return openAuth();
-  if (userId === currentUser.id) { showToast("You cannot message yourself"); return; }
-  const { data: existing } = await supabaseClient.from("conversation_participants").select("conversation_id").eq("user_id", currentUser.id);
-  const participantConversationIds = new Set((existing || []).map((p) => p.conversation_id));
-  const { data: otherParticipants } = await supabaseClient.from("conversation_participants").select("conversation_id").eq("user_id", userId);
-  const shared = (otherParticipants || []).filter((p) => participantConversationIds.has(p.conversation_id));
-  if (shared.length) { location.hash = "inbox"; setTimeout(() => openConversation(shared[0].conversation_id, ""), 50); return; }
-  const { data: conversation, error } = await supabaseClient.from("conversations").insert({}).select("id").single();
-  if (error) { showToast(error.message); return; }
-  await supabaseClient.from("conversation_participants").insert([{ conversation_id: conversation.id, user_id: currentUser.id }, { conversation_id: conversation.id, user_id: userId }]);
-  location.hash = "inbox";
-  setTimeout(() => openConversation(conversation.id, ""), 50);
+
+function handleIncomingMessage(newMsg) {
+  if (!newMsg) return;
+  if (newMsg.conversation_id === currentConversationId) {
+    const container = document.querySelector("#inbox-messages");
+    if (!container?.querySelector(`[data-message-id="${newMsg.id}"]`)) {
+      loadMessages(currentConversationId);
+    }
+  } else if (newMsg.sender_id !== currentUser?.id) {
+    showToast("New message received in Inbox");
+  }
+  loadConversations();
 }
+
 async function loadStoriesRow() {
   const list = document.querySelector("#stories-list");
   if (!list || !supabaseClient) return;
@@ -626,7 +1187,7 @@ function renderViews() {
   renderCollection("saved-list", state.stories.filter((story) => state.saved.includes(story.id)));
   renderCollection("discover-list", discoverStories);
 }
-function navigate() { const requestedHash = location.hash.replace("#", "") || "feed"; const hash = document.querySelector(`#${CSS.escape(requestedHash)}.view`) ? requestedHash : "feed"; document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === hash)); document.querySelectorAll(".side-menu a").forEach((link) => link.classList.toggle("active", link.getAttribute("href") === `#${hash}`)); if (hash === "my-dairy" || hash === "saved" || hash === "discover" || hash === "profile" || hash === "following") renderViews(); if (hash === "profile" || hash.startsWith("profile-")) renderProfile(); if (hash === "inbox") loadUsers(); if (hash === "feed") loadStoriesRow(); }
+function navigate() { const requestedHash = location.hash.replace("#", "") || "feed"; const hash = document.querySelector(`#${CSS.escape(requestedHash)}.view`) ? requestedHash : "feed"; document.querySelectorAll(".view").forEach((view) => view.classList.toggle("active", view.id === hash)); document.querySelectorAll(".side-menu a").forEach((link) => link.classList.toggle("active", link.getAttribute("href") === `#${hash}`)); if (hash === "my-dairy" || hash === "saved" || hash === "discover" || hash === "profile" || hash === "following") renderViews(); if (hash === "profile" || hash.startsWith("profile-")) renderProfile(); if (hash === "inbox") { loadConversations(); loadUsers(); } if (hash === "feed") loadStoriesRow(); }
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>'"]/g, (character) => ({
@@ -769,19 +1330,35 @@ document.addEventListener("click", (event) => {
   localStorage.setItem("dairy-follows", JSON.stringify(state.follows));
   button.textContent = state.follows.includes(name) ? "Following" : "Follow";
 });
-document.querySelector("#inbox-search")?.addEventListener("input", async (event) => {
+document.querySelector("#inbox-tab-chats")?.addEventListener("click", () => switchInboxTab("chats"));
+document.querySelector("#inbox-tab-people")?.addEventListener("click", () => switchInboxTab("people"));
+document.querySelector("#inbox-back-btn")?.addEventListener("click", () => {
+  document.querySelector("#inbox-container")?.classList.remove("chat-open");
+});
+document.querySelector("#inbox-search")?.addEventListener("input", (event) => {
   const query = event.target.value.toLowerCase().trim();
-  const items = document.querySelectorAll("#user-list .conversation-item");
-  items.forEach((item) => {
-    const text = item.textContent.toLowerCase();
-    item.hidden = Boolean(query && !text.includes(query));
-  });
+  if (activeInboxTab === "chats") {
+    const items = document.querySelectorAll("#conversation-threads-list .conversation-item");
+    items.forEach((item) => {
+      const text = item.textContent.toLowerCase();
+      item.hidden = Boolean(query && !text.includes(query));
+    });
+  } else {
+    const items = document.querySelectorAll("#user-list .conversation-item");
+    items.forEach((item) => {
+      const text = item.textContent.toLowerCase();
+      item.hidden = Boolean(query && !text.includes(query));
+    });
+  }
 });
 document.querySelector("#inbox-composer")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const input = document.querySelector("#inbox-input");
-  await sendMessage(input.value);
-  input.value = "";
+  if (input) {
+    const text = input.value;
+    input.value = "";
+    await sendMessage(text);
+  }
 });
 document.querySelectorAll(".profile-actions .button").forEach((button) => {
   button.addEventListener("click", () => {
@@ -1246,11 +1823,11 @@ supabaseClient?.auth.getSession().then(({ data }) => {
   updateAuthUi();
   loadStories().catch((error) => { feedList.innerHTML = `<div class="empty-state">${escapeHtml(currentUser ? error.message : "Sign in to load the community feed")}</div>`; });
   loadSuggestions();
+  loadConversations();
   loadUsers();
   loadStoriesRow();
   supabaseClient.channel("inbox").on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
-    if (payload.new.conversation_id === currentConversationId) loadMessages(currentConversationId);
-    loadConversations();
+    handleIncomingMessage(payload.new);
   }).subscribe();
 });
 supabaseClient?.auth.onAuthStateChange((_event, session) => {
@@ -1258,6 +1835,7 @@ supabaseClient?.auth.onAuthStateChange((_event, session) => {
   updateAuthUi();
   loadStories().catch(() => {});
   loadSuggestions();
+  loadConversations();
   loadUsers();
   loadStoriesRow();
 });

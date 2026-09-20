@@ -200,29 +200,67 @@
 		.profile-stat strong { font-size: 1.05rem; color: var(--ink); }
 		.profile-stat span { color: var(--muted); font-size: .72rem; }
 		.profile-bio { margin: 0; color: var(--muted); font-size: .88rem; }
-		.inbox { display: grid; grid-template-columns: 280px 1fr; border: 1px solid var(--line); border-radius: 12px; background: var(--card); box-shadow: var(--shadow); overflow: hidden; min-height: 520px; }
-		.inbox-sidebar { border-right: 1px solid var(--line); padding: 18px; display: flex; flex-direction: column; gap: 14px; }
-		.inbox-heading { margin: 0; }
-		.inbox-heading h1 { font-size: 1.35rem; margin: 4px 0 0; }
-		.inbox-search { width: 100%; margin-bottom: 10px; }
-		.conversation-list { display: grid; gap: 6px; overflow: auto; }
-		.conversation-item { display: flex; gap: 10px; align-items: center; padding: 10px; border-radius: 10px; border: 1px solid transparent; background: transparent; color: inherit; font: inherit; text-align: left; }
-		.conversation-item:hover, .conversation-item.active { background: var(--paper); border-color: var(--line); }
-		.conversation-item .avatar { width: 36px; height: 36px; font-size: .8rem; }
-		.conversation-meta { display: grid; gap: 2px; min-width: 0; }
-		.conversation-meta strong { font-size: .85rem; }
-		.conversation-meta span { color: var(--muted); font-size: .72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-		.inbox-chat { display: flex; flex-direction: column; }
-		.inbox-placeholder { margin: auto; padding: 34px 20px; color: var(--muted); text-align: center; }
-		.inbox-messages { flex: 1; padding: 18px; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
-		.inbox-message { max-width: 70%; padding: 10px 12px; border-radius: 12px; background: var(--paper); border: 1px solid var(--line); }
-		.inbox-message.mine { margin-left: auto; background: var(--green-light); border-color: #cfe3d2; }
-		.inbox-message strong { display: block; font-size: .75rem; margin-bottom: 4px; color: var(--ink); }
-		.inbox-message p { margin: 0; font-size: .88rem; }
-		.inbox-message time { display: block; margin-top: 6px; color: var(--muted); font-size: .7rem; text-align: right; }
-		.inbox-composer { display: flex; gap: 10px; padding: 14px; border-top: 1px solid var(--line); }
-		.inbox-composer input { flex: 1; padding: 10px 11px; border: 1px solid var(--line); border-radius: 8px; color: var(--ink); background: var(--paper); outline: 0; }
+		.inbox { display: grid; grid-template-columns: 310px 1fr; border: 1px solid var(--line); border-radius: 14px; background: var(--card); box-shadow: var(--shadow); overflow: hidden; min-height: 560px; height: 75vh; max-height: 820px; }
+		.inbox-sidebar { border-right: 1px solid var(--line); padding: 16px; display: flex; flex-direction: column; gap: 12px; background: var(--card); overflow: hidden; }
+		.inbox-heading { display: flex; align-items: center; justify-content: space-between; }
+		.inbox-heading h1 { font-size: 1.35rem; margin: 2px 0 0; }
+		.inbox-tabs { display: flex; gap: 6px; background: var(--paper); padding: 4px; border-radius: 9px; border: 1px solid var(--line); }
+		.inbox-tab { flex: 1; padding: 7px 10px; border: 0; background: transparent; color: var(--muted); border-radius: 6px; font-size: .8rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all .15s; }
+		.inbox-tab:hover { color: var(--ink); }
+		.inbox-tab.active { background: var(--card); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+		.inbox-tab .badge { background: var(--green-light); color: var(--ink); font-size: .68rem; padding: 1px 6px; border-radius: 10px; font-weight: 800; }
+		.inbox-search { width: 100%; margin: 0; }
+		.conversation-list { display: flex; flex-direction: column; gap: 5px; overflow-y: auto; flex: 1; padding-right: 2px; }
+		.conversation-item { display: flex; gap: 11px; align-items: center; padding: 10px 12px; border-radius: 10px; border: 1px solid transparent; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background .15s, border-color .15s; position: relative; }
+		.conversation-item:hover { background: var(--paper); border-color: var(--line); }
+		.conversation-item.active { background: var(--paper); border-color: var(--green); }
+		.conversation-item .avatar { width: 40px; height: 40px; font-size: .85rem; border-radius: 50%; flex-shrink: 0; position: relative; }
+		.conversation-item .avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+		.status-dot { width: 9px; height: 9px; background: #34d399; border: 2px solid var(--card); border-radius: 50%; position: absolute; bottom: 0; right: 0; }
+		.conversation-meta { display: grid; gap: 2px; min-width: 0; flex: 1; }
+		.conversation-meta-top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+		.conversation-meta strong { font-size: .88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+		.conversation-meta time { color: var(--muted); font-size: .7rem; flex-shrink: 0; }
+		.conversation-meta span { color: var(--muted); font-size: .76rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+		.conversation-item.has-unread .conversation-meta strong { font-weight: 800; color: var(--ink); }
+		.conversation-item.has-unread .conversation-meta span { font-weight: 700; color: var(--ink); }
+		.unread-dot { width: 8px; height: 8px; background: var(--coral); border-radius: 50%; flex-shrink: 0; }
+		.inbox-chat { display: flex; flex-direction: column; background: var(--card); height: 100%; overflow: hidden; position: relative; }
+		.inbox-chat-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; border-bottom: 1px solid var(--line); background: var(--card); gap: 12px; z-index: 2; }
+		.inbox-header-info { display: flex; align-items: center; gap: 11px; min-width: 0; }
+		.inbox-header-info .avatar { width: 38px; height: 38px; font-size: .85rem; flex-shrink: 0; }
+		.inbox-header-info .avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+		.inbox-header-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+		.inbox-header-text strong { font-size: .92rem; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+		.inbox-header-text span { font-size: .72rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+		.inbox-header-actions { display: flex; gap: 8px; align-items: center; }
+		.inbox-back-btn { display: none; background: transparent; border: 1px solid var(--line); color: var(--ink); border-radius: 8px; padding: 6px 11px; font-size: .88rem; font-weight: 700; cursor: pointer; }
+		.inbox-back-btn:hover { background: var(--paper); }
+		.inbox-placeholder { margin: auto; padding: 40px 24px; color: var(--muted); text-align: center; max-width: 360px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+		.inbox-placeholder-icon { width: 56px; height: 56px; border-radius: 50%; background: var(--green-light); color: var(--green); display: grid; place-items: center; font-size: 1.5rem; margin-bottom: 4px; }
+		.inbox-placeholder h3 { margin: 0; font-size: 1.15rem; color: var(--ink); }
+		.inbox-placeholder p { margin: 0; font-size: .84rem; line-height: 1.45; }
+		.inbox-messages { flex: 1; padding: 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; background: var(--card); }
+		.inbox-message { max-width: 72%; padding: 10px 14px; border-radius: 14px; border-bottom-left-radius: 4px; background: var(--paper); border: 1px solid var(--line); display: flex; flex-direction: column; align-self: flex-start; word-break: break-word; }
+		.inbox-message.mine { align-self: flex-end; border-bottom-left-radius: 14px; border-bottom-right-radius: 4px; background: var(--green-light); border-color: rgba(138, 181, 154, 0.45); }
+		.inbox-message strong { display: block; font-size: .75rem; margin-bottom: 3px; color: var(--muted); font-weight: 600; }
+		.inbox-message.mine strong { display: none; }
+		.inbox-message p { margin: 0; font-size: .9rem; line-height: 1.45; color: var(--ink); white-space: pre-wrap; }
+		.inbox-message time { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 6px; color: var(--muted); font-size: .68rem; }
+		.inbox-icebreakers { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 16px 0; margin-top: auto; }
+		.icebreaker-chip { padding: 8px 13px; border-radius: 20px; border: 1px dashed var(--line); background: var(--paper); color: var(--ink); font-size: .8rem; font-weight: 600; cursor: pointer; transition: all .15s; }
+		.icebreaker-chip:hover { border-color: var(--green); background: var(--green-light); }
+		.inbox-composer { display: flex; gap: 9px; padding: 14px 18px; border-top: 1px solid var(--line); background: var(--card); align-items: center; }
+		.inbox-composer input { flex: 1; padding: 11px 14px; border: 1px solid var(--line); border-radius: 22px; color: var(--ink); background: var(--paper); outline: 0; font-size: .9rem; }
 		.inbox-composer input:focus { border-color: var(--green); }
+		.inbox-guest-card { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 36px 20px; gap: 12px; }
+		.inbox-guest-card .button { margin-top: 6px; }
+		@media (max-width: 768px) {
+			.inbox { grid-template-columns: 1fr; height: calc(100vh - 160px); min-height: 480px; }
+			.inbox.chat-open .inbox-sidebar { display: none; }
+			.inbox:not(.chat-open) .inbox-chat { display: none; }
+			.inbox-back-btn { display: inline-flex; }
+		}
 		.comments-section { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
 		.comments-section h4 { margin: 0 0 10px; font-size: 0.85rem; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
 		.comments-list { display: grid; gap: 10px; max-height: 320px; overflow: auto; padding-right: 4px; }
@@ -389,18 +427,53 @@
 		<section id="discover" class="view" aria-labelledby="discover-title"><div class="view-intro"><span class="eyebrow">Find something new</span><h1 id="discover-title">Discover</h1><p>Browse stories from the Dairy community.</p></div><label class="view-search" for="discover-search"><span aria-hidden="true">⌕</span><input id="discover-search" type="search" placeholder="Search posts, people, places..." autocomplete="off"></label><div id="discover-list"></div></section>
 		<section id="saved" class="view" aria-labelledby="saved-title"><div class="view-intro"><span class="eyebrow">Keep close</span><h1 id="saved-title">Saved stories</h1><p>Stories you want to return to.</p></div><div id="saved-list"></div></section>
 		<section id="inbox" class="view" aria-labelledby="inbox-title">
-			<div class="inbox">
-				<div class="inbox-sidebar">
-					<div class="inbox-heading"><span class="eyebrow">Messages</span><h1 id="inbox-title">Inbox</h1></div>
-					<label class="view-search" for="inbox-search"><span aria-hidden="true">⌕</span><input id="inbox-search" type="search" placeholder="Search people..." autocomplete="off"></label>
-					<div class="conversation-list" id="user-list"></div>
+			<div class="inbox" id="inbox-container">
+				<div class="inbox-sidebar" id="inbox-sidebar">
+					<div class="inbox-heading">
+						<div>
+							<span class="eyebrow">Messages</span>
+							<h1 id="inbox-title">Inbox</h1>
+						</div>
+					</div>
+					<div class="inbox-tabs" role="tablist" aria-label="Inbox views">
+						<button class="inbox-tab active" id="inbox-tab-chats" type="button" role="tab" aria-selected="true">
+							<span>Chats</span>
+							<span class="badge" id="inbox-chats-count">0</span>
+						</button>
+						<button class="inbox-tab" id="inbox-tab-people" type="button" role="tab" aria-selected="false">
+							<span>Community</span>
+						</button>
+					</div>
+					<label class="view-search" for="inbox-search">
+						<span aria-hidden="true">⌕</span>
+						<input id="inbox-search" type="search" placeholder="Search conversations or people..." autocomplete="off">
+					</label>
+					<div class="conversation-list" id="conversation-threads-list" role="list" aria-label="Active conversations"></div>
+					<div class="conversation-list" id="user-list" role="list" aria-label="Community members" hidden></div>
 				</div>
-				<div class="inbox-chat">
-					<div class="inbox-placeholder" id="inbox-placeholder">Select a user to start chatting.</div>
+				<div class="inbox-chat" id="inbox-chat-panel">
+					<div class="inbox-chat-header" id="inbox-chat-header" hidden>
+						<div class="inbox-header-info">
+							<button class="inbox-back-btn" id="inbox-back-btn" type="button" aria-label="Back to messages">←</button>
+							<div class="avatar" id="inbox-header-avatar"></div>
+							<div class="inbox-header-text">
+								<strong id="inbox-header-name">Writer</strong>
+								<span id="inbox-header-status">Active on Dairy</span>
+							</div>
+						</div>
+						<div class="inbox-header-actions">
+							<button class="button secondary compact" id="inbox-view-profile-btn" type="button">Profile</button>
+						</div>
+					</div>
+					<div class="inbox-placeholder" id="inbox-placeholder">
+						<div class="inbox-placeholder-icon">✉</div>
+						<h3>Your Conversations</h3>
+						<p>Select a chat from the sidebar or find a fellow writer in the Community tab to start a conversation.</p>
+					</div>
 					<div class="inbox-messages" id="inbox-messages" hidden></div>
 					<form class="inbox-composer" id="inbox-composer" hidden>
-						<input id="inbox-input" type="text" maxlength="2000" placeholder="Write a message..." autocomplete="off">
-						<button class="button" type="submit">Send</button>
+						<input id="inbox-input" type="text" maxlength="2000" placeholder="Write a friendly message..." autocomplete="off" required>
+						<button class="button" id="inbox-send-btn" type="submit">Send</button>
 					</form>
 				</div>
 			</div>
@@ -669,6 +742,6 @@
 		</form>
 	</div>
 	<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-	<script src="/app.js?v=20260920" defer></script>
+	<script src="/app.js?v=20260920b" defer></script>
 </body>
 </html>
