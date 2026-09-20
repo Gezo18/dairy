@@ -145,13 +145,13 @@ function updateAuthUi() {
   if (btn) btn.textContent = currentUser ? "Sign out" : "Sign in";
   const headerAvatar = document.querySelector(".avatar");
   const profileData = currentUser ? state.profiles.get(currentUser.id) : null;
-  const avatarUrl = profileData?.avatar_url || "";
+  const avatarUrl = profileData?.avatar_url || state.settings?.avatarUrl || "";
   if (headerAvatar) {
     if (avatarUrl) {
       headerAvatar.innerHTML = `<img src="${escapeAttr(avatarUrl)}" alt="">`;
       headerAvatar.classList.add("has-image");
     } else {
-      headerAvatar.textContent = currentUser?.user_metadata?.display_name?.slice(0, 2).toUpperCase() || "AM";
+      headerAvatar.textContent = currentUser?.user_metadata?.display_name?.slice(0, 2).toUpperCase() || state.settings.name?.slice(0, 2).toUpperCase() || "AM";
       headerAvatar.classList.remove("has-image");
     }
   }
@@ -405,14 +405,90 @@ async function loadStoriesRow() {
     list.append(item);
   }
 }
+
+function fileToOptimizedDataUrl(file, maxWidth = 400, maxHeight = 400, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    if (!file) return resolve("");
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => resolve(reader.result);
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          let { width, height } = img;
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+          canvas.width = Math.max(width, 1);
+          canvas.height = Math.max(height, 1);
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        } catch {
+          resolve(reader.result);
+        }
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadToServer(file) {
+  if (!file) return "";
+  const response = await fetch("/api/upload", {
+    method: "POST",
+    headers: {
+      "Content-Type": file.type || "application/octet-stream",
+      "X-Filename": encodeURIComponent(file.name || "media.bin")
+    },
+    body: file
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Server upload failed: ${errorText}`);
+  }
+  const result = await response.json();
+  return result.url;
+}
+
 async function uploadStoryMedia(file) {
-  if (!file || !currentUser) return;
-  const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "bin";
-  const path = `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
-  const { error } = await supabaseClient.storage.from("stories").upload(path, file, { contentType: file.type, upsert: false });
-  if (error) throw error;
-  const { data } = supabaseClient.storage.from("stories").getPublicUrl(path);
-  return { url: data.publicUrl, type: file.type.startsWith("video/") ? "video" : "image" };
+  if (!file) return;
+  const isVideo = file.type.startsWith("video/");
+  let mediaUrl = "";
+
+  if (currentUser && supabaseClient) {
+    try {
+      const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "bin";
+      const path = `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
+      const { data: uploadData, error } = await supabaseClient.storage.from("stories").upload(path, file, { contentType: file.type, upsert: false });
+      if (!error && uploadData) {
+        const { data } = supabaseClient.storage.from("stories").getPublicUrl(path);
+        if (data?.publicUrl) mediaUrl = data.publicUrl;
+      }
+    } catch (e) {
+      console.warn("Supabase stories storage unavailable, falling back:", e);
+    }
+  }
+
+  if (!mediaUrl) {
+    try {
+      mediaUrl = await uploadToServer(file);
+    } catch (e) {
+      console.warn("Server upload fallback failed:", e);
+    }
+  }
+
+  if (!mediaUrl && !isVideo && file.size < 5 * 1024 * 1024) {
+    mediaUrl = await fileToOptimizedDataUrl(file, 1080, 1920, 0.85);
+  }
+
+  if (!mediaUrl) throw new Error("Could not upload story media");
+  return { url: mediaUrl, type: isVideo ? "video" : "image" };
 }
 async function createStory() {
   if (!currentUser || !supabaseClient) return openAuth();
@@ -509,8 +585,8 @@ function renderProfile() {
   }
   const profileData = state.profiles.get(profileId) || {};
   const isMe = profileId === currentUser?.id;
-  const initials = (profileData.display_name || "?").slice(0, 2).toUpperCase();
-  const avatarUrl = profileData.avatar_url || "";
+  const initials = (profileData.display_name || state.settings.name || "?").slice(0, 2).toUpperCase();
+  const avatarUrl = profileData.avatar_url || (isMe ? state.settings?.avatarUrl : "") || "";
   avatarEl.className = "avatar profile-avatar" + (avatarUrl ? " has-image" : "");
   avatarEl.innerHTML = avatarUrl ? `<img src="${escapeAttr(avatarUrl)}" alt="">` : initials;
   nameEl.textContent = profileData.display_name || "User";
@@ -577,12 +653,37 @@ async function uploadMedia(files) {
   for (const file of files) {
     if (!/^image\/(jpeg|png|gif|webp)$|^video\/(mp4|webm|quicktime)$/.test(file.type)) throw new Error("Use JPG, PNG, GIF, WEBP, MP4, or WEBM files");
     if (file.size > 50 * 1024 * 1024) throw new Error("Each media file must be 50 MB or smaller");
-    const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "bin";
-    const path = `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
-    const { error } = await supabaseClient.storage.from("post-media").upload(path, file, { contentType: file.type, upsert: false });
-    if (error) throw error;
-    const { data } = supabaseClient.storage.from("post-media").getPublicUrl(path);
-    uploaded.push({ type: file.type.startsWith("video/") ? "video" : "image", url: data.publicUrl });
+    const isVideo = file.type.startsWith("video/");
+    let mediaUrl = "";
+
+    if (currentUser && supabaseClient) {
+      try {
+        const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "bin";
+        const path = `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
+        const { data: uploadData, error } = await supabaseClient.storage.from("post-media").upload(path, file, { contentType: file.type, upsert: false });
+        if (!error && uploadData) {
+          const { data } = supabaseClient.storage.from("post-media").getPublicUrl(path);
+          if (data?.publicUrl) mediaUrl = data.publicUrl;
+        }
+      } catch (e) {
+        console.warn("Supabase post-media storage unavailable, falling back:", e);
+      }
+    }
+
+    if (!mediaUrl) {
+      try {
+        mediaUrl = await uploadToServer(file);
+      } catch (e) {
+        console.warn("Server upload fallback failed:", e);
+      }
+    }
+
+    if (!mediaUrl && !isVideo && file.size < 5 * 1024 * 1024) {
+      mediaUrl = await fileToOptimizedDataUrl(file, 1200, 1200, 0.85);
+    }
+
+    if (!mediaUrl) throw new Error("Could not process uploaded media file");
+    uploaded.push({ type: isVideo ? "video" : "image", url: mediaUrl });
   }
   return uploaded;
 }
@@ -692,18 +793,68 @@ document.querySelectorAll(".profile-actions .button").forEach((button) => {
   });
 });
 async function uploadAvatar(file) {
-  if (!file || !currentUser) return;
+  if (!file) return "";
   if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) throw new Error("Use JPG, PNG, GIF, or WEBP");
-  if (file.size > 2 * 1024 * 1024) throw new Error("Avatar must be 2 MB or smaller");
-  const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "bin";
-  const path = `${currentUser.id}/avatar.${extension}`;
-  const { error } = await supabaseClient.storage.from("avatars").upload(path, file, { contentType: file.type, upsert: true });
-  if (error) throw error;
-  const { data } = supabaseClient.storage.from("avatars").getPublicUrl(path);
-  const avatarUrl = data.publicUrl;
-  const { error: updateError } = await supabaseClient.from("profiles").update({ avatar_url: avatarUrl }).eq("id", currentUser.id);
-  if (updateError) throw updateError;
-  state.profiles.set(currentUser.id, { ...state.profiles.get(currentUser.id), avatar_url: avatarUrl });
+  if (file.size > 5 * 1024 * 1024) throw new Error("Avatar must be 5 MB or smaller");
+
+  let avatarUrl = "";
+
+  // 1. Try Supabase storage bucket 'avatars' if user and client exist
+  if (currentUser && supabaseClient) {
+    try {
+      const extension = file.name.includes(".") ? file.name.split(".").pop().toLowerCase() : "jpg";
+      const path = `${currentUser.id}/avatar.${extension}`;
+      const { data: uploadData, error } = await supabaseClient.storage.from("avatars").upload(path, file, { contentType: file.type, upsert: true });
+      if (!error && uploadData) {
+        const { data } = supabaseClient.storage.from("avatars").getPublicUrl(path);
+        if (data?.publicUrl) avatarUrl = data.publicUrl;
+      }
+    } catch (storageErr) {
+      console.warn("Supabase avatars storage unavailable, falling back:", storageErr);
+    }
+  }
+
+  // 2. Fallback to server local upload
+  if (!avatarUrl) {
+    try {
+      avatarUrl = await uploadToServer(file);
+    } catch (serverErr) {
+      console.warn("Server upload fallback failed, using optimized data URL:", serverErr);
+    }
+  }
+
+  // 3. Fallback to optimized client-side Data URL
+  if (!avatarUrl) {
+    avatarUrl = await fileToOptimizedDataUrl(file, 256, 256, 0.85);
+  }
+
+  if (!avatarUrl) throw new Error("Could not process avatar image");
+
+  // Save to profile in Supabase if logged in
+  if (currentUser && supabaseClient) {
+    try {
+      const { error: updateError } = await supabaseClient.from("profiles").update({ avatar_url: avatarUrl }).eq("id", currentUser.id);
+      if (updateError) console.warn("Supabase profile avatar update warning:", updateError);
+    } catch (err) {
+      console.warn("Profile update error:", err);
+    }
+    const existing = state.profiles.get(currentUser.id) || {};
+    state.profiles.set(currentUser.id, { ...existing, avatar_url: avatarUrl });
+  }
+
+  // Persist locally for instant rendering
+  state.settings.avatarUrl = avatarUrl;
+  localStorage.setItem("dairy-settings", JSON.stringify(state.settings));
+
+  // Update preview in UI
+  const previewEl = document.querySelector("#setting-avatar-preview");
+  if (previewEl) {
+    previewEl.innerHTML = `<img src="${escapeAttr(avatarUrl)}" alt="">`;
+    previewEl.classList.add("has-image");
+  }
+  updateAuthUi();
+  renderProfile();
+
   return avatarUrl;
 }
 function loadSettingsUi() {
@@ -728,6 +879,19 @@ function loadSettingsUi() {
   setCheck("#setting-notify-messages", s.notifyMessages !== false);
   setCheck("#setting-notify-follows", s.notifyFollows !== false);
 
+  const currentAvatarUrl = (currentUser ? state.profiles.get(currentUser.id)?.avatar_url : null) || state.settings?.avatarUrl || "";
+  const previewEl = document.querySelector("#setting-avatar-preview");
+  if (previewEl) {
+    if (currentAvatarUrl) {
+      previewEl.innerHTML = `<img src="${escapeAttr(currentAvatarUrl)}" alt="">`;
+      previewEl.classList.add("has-image");
+    } else {
+      const initials = (s.name || "AM").slice(0, 2).toUpperCase();
+      previewEl.textContent = initials;
+      previewEl.classList.remove("has-image");
+    }
+  }
+
   applyTheme(s.theme || "system");
   applyFontSize(s.fontSize || "standard");
   applyFeedView(s.feedView || "cards");
@@ -744,6 +908,19 @@ document.querySelector("#setting-feedview")?.addEventListener("change", (e) => {
   applyFeedView(e.target.value);
 });
 
+// Live preview when selecting an avatar file
+document.querySelector("#setting-avatar")?.addEventListener("change", (e) => {
+  const file = e.target.files?.[0];
+  if (file) {
+    const previewEl = document.querySelector("#setting-avatar-preview");
+    if (previewEl) {
+      const objUrl = URL.createObjectURL(file);
+      previewEl.innerHTML = `<img src="${objUrl}" alt="">`;
+      previewEl.classList.add("has-image");
+    }
+  }
+});
+
 // Settings form submission
 document.querySelector("#settings-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -755,8 +932,14 @@ document.querySelector("#settings-form")?.addEventListener("submit", async (even
 
   try {
     if (fileInput?.files?.[0]) {
-      await uploadAvatar(fileInput.files[0]);
-      showToast("Profile picture updated");
+      try {
+        await uploadAvatar(fileInput.files[0]);
+        fileInput.value = "";
+        showToast("Profile picture updated");
+      } catch (avatarErr) {
+        console.warn("Avatar processing notice:", avatarErr);
+        showToast(avatarErr.message || "Could not update profile picture");
+      }
     }
 
     const name = document.querySelector("#setting-name")?.value.trim() || "You";

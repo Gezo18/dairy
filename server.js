@@ -138,6 +138,30 @@ function readJson(request) {
   });
 }
 
+function readBinary(request, maxBytes = 25 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    let tooLarge = false;
+    request.on('data', (chunk) => {
+      if (tooLarge) return;
+      size += chunk.length;
+      if (size > maxBytes) {
+        tooLarge = true;
+        reject(new Error('File exceeds maximum upload size of 25MB'));
+        request.resume();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on('end', () => {
+      if (tooLarge) return;
+      resolve(Buffer.concat(chunks));
+    });
+    request.on('error', reject);
+  });
+}
+
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
   const hash = crypto.scryptSync(password, salt, 64).toString('hex');
   return `${salt}:${hash}`;
@@ -310,6 +334,47 @@ async function handleRequest(request, response) {
   if (method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return serveIndex(response);
   if (method === 'GET' && url.pathname === '/app.js') return serveApp(response);
   if (method === 'GET' && url.pathname === '/api/health') return sendJson(response, 200, { ok: true, service: 'dairy-api' });
+
+  if (method === 'POST' && url.pathname === '/api/upload') {
+    try {
+      const buffer = await readBinary(request);
+      if (!buffer || buffer.length === 0) return sendError(response, 400, 'Empty upload payload');
+      const rawFilename = request.headers['x-filename'] ? decodeURIComponent(request.headers['x-filename']) : 'file.bin';
+      const cleanName = path.basename(rawFilename).replace(/[^a-zA-Z0-9._-]/g, '') || 'file.bin';
+      const filename = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${cleanName}`;
+      const uploadsDir = path.join(__dirname, 'uploads');
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+      fs.writeFileSync(path.join(uploadsDir, filename), buffer);
+      return sendJson(response, 201, { url: `/uploads/${filename}` });
+    } catch (err) {
+      console.error('Upload error:', err);
+      return sendError(response, 500, err.message || 'Upload failed');
+    }
+  }
+
+  if (method === 'GET' && url.pathname.startsWith('/uploads/')) {
+    const filename = path.basename(url.pathname);
+    const filePath = path.join(__dirname, 'uploads', filename);
+    if (!fs.existsSync(filePath)) return sendError(response, 404, 'File not found');
+    const ext = path.extname(filename).toLowerCase();
+    const mimeMap = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.webp': 'image/webp',
+      '.gif': 'image/gif',
+      '.svg': 'image/svg+xml',
+      '.mp4': 'video/mp4',
+      '.webm': 'video/webm',
+      '.mov': 'video/quicktime'
+    };
+    response.writeHead(200, {
+      'Content-Type': mimeMap[ext] || 'application/octet-stream',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'X-Content-Type-Options': 'nosniff'
+    });
+    return response.end(fs.readFileSync(filePath));
+  }
 
   if (method === 'POST' && url.pathname === '/api/auth/register') {
     let body;

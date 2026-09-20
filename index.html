@@ -432,7 +432,10 @@
 					</label>
 					<div class="form-row">
 						<label class="field" id="field-setting-avatar">Profile picture
-							<input id="setting-avatar" type="file" accept="image/*">
+							<div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
+								<span class="avatar" id="setting-avatar-preview" style="width:42px;height:42px;flex-shrink:0;">AM</span>
+								<input id="setting-avatar" type="file" accept="image/*" style="flex:1;">
+							</div>
 						</label>
 						<label class="field" id="field-setting-audience">Default story audience
 							<select id="setting-audience">
