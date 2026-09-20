@@ -4,9 +4,7 @@ const feedList = document.querySelector("#feed-list");
 const authPanel = document.querySelector("#auth-panel");
 const authForm = document.querySelector("#auth-form");
 const authButton = document.querySelector("#auth-button");
-const supabaseUrl = location.hostname === "127.0.0.1" || location.hostname === "localhost"
-  ? "https://cwjcljzraxkclowrcizx.supabase.co"
-  : `${location.origin}/api/supabase`;
+const supabaseUrl = "https://cwjcljzraxkclowrcizx.supabase.co";
 const supabaseClient = window.supabase?.createClient(
   supabaseUrl,
   "sb_publishable_0TY2UkTjVtyqvbHsO4-EqA_jrIE3XNc"
@@ -66,35 +64,55 @@ async function loadSuggestions() {
 
 function openAuth(mode = "signin") {
   authMode = mode;
-  document.querySelector("#auth-title").textContent = mode === "signin" ? "Sign in to Dairy" : "Create your Dairy account";
-  document.querySelector("#auth-copy").textContent = mode === "signin" ? "Use your account to share and see protected stories." : "Create an account to join the community.";
-  document.querySelector("#auth-name").hidden = mode === "signin";
-  document.querySelector("#auth-name").required = mode === "signup";
-  document.querySelector("#auth-password").autocomplete = mode === "signin" ? "current-password" : "new-password";
-  document.querySelector("#auth-submit").textContent = mode === "signin" ? "Sign in" : "Create account";
-  document.querySelector("#auth-switch").textContent = mode === "signin" ? "Create an account" : "Already have an account?";
-  document.querySelector("#auth-error").textContent = "";
-  authPanel.classList.add("open");
-  document.querySelector("#auth-email").focus();
+  const titleEl = document.querySelector("#auth-title");
+  if (titleEl) titleEl.textContent = mode === "signin" ? "Sign in to Dairy" : "Create your Dairy account";
+  const copyEl = document.querySelector("#auth-copy");
+  if (copyEl) copyEl.textContent = mode === "signin" ? "Use your account to share and see protected stories." : "Create an account to join the community.";
+  const nameEl = document.querySelector("#auth-name");
+  if (nameEl) {
+    nameEl.hidden = mode === "signin";
+    nameEl.required = mode === "signup";
+  }
+  const passEl = document.querySelector("#auth-password");
+  if (passEl) passEl.autocomplete = mode === "signin" ? "current-password" : "new-password";
+  const submitEl = document.querySelector("#auth-submit");
+  if (submitEl) submitEl.textContent = mode === "signin" ? "Sign in" : "Create account";
+  const switchEl = document.querySelector("#auth-switch");
+  if (switchEl) switchEl.textContent = mode === "signin" ? "Create an account" : "Already have an account?";
+  const errEl = document.querySelector("#auth-error");
+  if (errEl) errEl.textContent = "";
+  const panel = document.querySelector("#auth-panel") || authPanel;
+  panel?.classList.add("open");
+  document.querySelector("#auth-email")?.focus();
 }
 
-function closeAuth() { authPanel.classList.remove("open"); authForm.reset(); }
+function closeAuth() {
+  const panel = document.querySelector("#auth-panel") || authPanel;
+  panel?.classList.remove("open");
+  const form = document.querySelector("#auth-form") || authForm;
+  form?.reset();
+}
 function updateAuthUi() {
-  authButton.textContent = currentUser ? "Sign out" : "Sign in";
+  const btn = document.querySelector("#auth-button") || authButton;
+  if (btn) btn.textContent = currentUser ? "Sign out" : "Sign in";
   const headerAvatar = document.querySelector(".avatar");
   const profileData = currentUser ? state.profiles.get(currentUser.id) : null;
   const avatarUrl = profileData?.avatar_url || "";
-  if (avatarUrl) {
-    headerAvatar.innerHTML = `<img src="${escapeAttr(avatarUrl)}" alt="">`;
-    headerAvatar.classList.add("has-image");
-  } else {
-    headerAvatar.textContent = currentUser?.user_metadata?.display_name?.slice(0, 2).toUpperCase() || "AM";
-    headerAvatar.classList.remove("has-image");
+  if (headerAvatar) {
+    if (avatarUrl) {
+      headerAvatar.innerHTML = `<img src="${escapeAttr(avatarUrl)}" alt="">`;
+      headerAvatar.classList.add("has-image");
+    } else {
+      headerAvatar.textContent = currentUser?.user_metadata?.display_name?.slice(0, 2).toUpperCase() || "AM";
+      headerAvatar.classList.remove("has-image");
+    }
   }
-  document.querySelector("#setting-email").value = currentUser?.email || "";
+  const emailInput = document.querySelector("#setting-email");
+  if (emailInput) emailInput.value = currentUser?.email || "";
   if (currentUser?.user_metadata?.display_name) {
     state.settings.name = currentUser.user_metadata.display_name;
-    document.querySelector("#setting-name").value = state.settings.name;
+    const nameInput = document.querySelector("#setting-name");
+    if (nameInput) nameInput.value = state.settings.name;
   }
 }
 
@@ -554,7 +572,7 @@ storyForm?.addEventListener("submit", async (event) => {
   }
 });
 
-document.querySelector(".composer-toggle")?.addEventListener("click", () => document.querySelector("#composer-options").classList.toggle("open"));
+document.querySelector(".composer-toggle")?.addEventListener("click", () => document.querySelector("#composer-options")?.classList.toggle("open"));
 document.querySelector("#media-files")?.addEventListener("change", (event) => {
   const preview = document.querySelector("#media-preview");
   preview.replaceChildren();
@@ -738,9 +756,9 @@ supabaseClient?.auth.onAuthStateChange((_event, session) => {
 });
 document.querySelector("#your-story")?.addEventListener("click", () => {
   if (!currentUser) return openAuth();
-  document.querySelector("#story-modal").classList.add("open");
+  document.querySelector("#story-modal")?.classList.add("open");
 });
-document.querySelector("#story-cancel")?.addEventListener("click", () => document.querySelector("#story-modal").classList.remove("open"));
+document.querySelector("#story-cancel")?.addEventListener("click", () => document.querySelector("#story-modal")?.classList.remove("open"));
 document.querySelector("#story-share")?.addEventListener("click", createStory);
 document.querySelector("#story-close")?.addEventListener("click", closeStoryViewer);
 document.addEventListener("keydown", (event) => {

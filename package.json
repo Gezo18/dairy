@@ -5,14 +5,10 @@
   "description": "A small backend for the Dairy story-sharing website",
   "main": "server.js",
   "scripts": {
+    "dev": "node server.js",
     "start": "node server.js",
-    "deploy": "wrangler deploy",
-    "preview": "wrangler dev"
+    "build": "node -e \"console.log('Build complete')\""
   },
-  "dependencies": {
-    "@netlify/blobs": "^9.0.0"
-  },
-  "devDependencies": {
-    "wrangler": "^4.129.1"
-  }
+  "dependencies": {},
+  "devDependencies": {}
 }

@@ -4,8 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
 
-const PORT = Number(process.env.PORT) || 3000;
-const HOST = process.env.HOST || '127.0.0.1';
+const PORT = 3000;
+const HOST = '0.0.0.0';
 const SESSION_COOKIE = 'dairy_session';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const DATABASE_FILE = path.join(__dirname, 'dairy.sqlite');
@@ -63,6 +63,21 @@ function loadData() {
     const { author_json: authorJson, ...publicFields } = story;
     return { ...publicFields, author: JSON.parse(authorJson), comments: commentList.length, commentList };
   });
+
+  if (users.size === 0 && stories.length === 0 && fs.existsSync(path.join(__dirname, 'data.json'))) {
+    try {
+      const seed = JSON.parse(fs.readFileSync(path.join(__dirname, 'data.json'), 'utf-8'));
+      if (Array.isArray(seed.users)) {
+        for (const u of seed.users) users.set(u.email, u);
+      }
+      if (Array.isArray(seed.stories)) {
+        stories = seed.stories;
+      }
+      saveData();
+    } catch (e) {
+      console.warn('Could not seed data from data.json', e);
+    }
+  }
 }
 
 function saveData() {
@@ -211,9 +226,7 @@ function validateStory(body) {
 function serveIndex(response) {
   response.writeHead(200, {
     'Content-Type': 'text/html; charset=utf-8',
-    'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; img-src 'self' https: data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
-    'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'X-Frame-Options': 'DENY',
+    'Cache-Control': 'no-cache',
     'X-Content-Type-Options': 'nosniff'
   });
   response.end(fs.readFileSync(INDEX_FILE));
@@ -232,9 +245,66 @@ async function handleRequest(request, response) {
   const url = new URL(request.url, `http://${request.headers.host || `${HOST}:${PORT}`}`);
   const method = request.method || 'GET';
 
-  if (request.headers['x-forwarded-proto'] === 'http') {
-    response.writeHead(301, { Location: `https://${request.headers.host}${request.url}` });
+  if (method === 'OPTIONS') {
+    response.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': '*',
+      'Access-Control-Max-Age': '86400'
+    });
     return response.end();
+  }
+
+  if (url.pathname.startsWith('/api/supabase')) {
+    if (request.headers.upgrade || (request.headers.connection && request.headers.connection.toLowerCase().includes('upgrade'))) {
+      response.writeHead(426, {
+        'Content-Type': 'text/plain',
+        'Access-Control-Allow-Origin': '*'
+      });
+      return response.end('WebSocket upgrades should connect directly to Supabase');
+    }
+
+    const subPath = url.pathname.replace(/^\/api\/supabase\/?/, '');
+    const SUPABASE_ORIGIN = 'https://cwjcljzraxkclowrcizx.supabase.co';
+    const target = new URL(`${SUPABASE_ORIGIN}/${subPath}${url.search}`);
+    const headers = {};
+    const forbidden = ['connection', 'upgrade', 'keep-alive', 'transfer-encoding', 'te', 'host', 'origin', 'referer', 'content-length'];
+    for (const [key, val] of Object.entries(request.headers)) {
+      if (!forbidden.includes(key.toLowerCase())) {
+        headers[key] = val;
+      }
+    }
+
+    let reqBody;
+    if (method !== 'GET' && method !== 'HEAD') {
+      const chunks = [];
+      for await (const chunk of request) chunks.push(chunk);
+      reqBody = Buffer.concat(chunks);
+    }
+
+    try {
+      const upstream = await fetch(target.toString(), {
+        method,
+        headers,
+        body: reqBody
+      });
+      const resHeaders = {};
+      for (const [k, v] of upstream.headers.entries()) {
+        if (!['access-control-allow-origin', 'access-control-allow-credentials', 'content-encoding', 'content-length'].includes(k.toLowerCase())) {
+          resHeaders[k] = v;
+        }
+      }
+      resHeaders['Access-Control-Allow-Origin'] = '*';
+      resHeaders['Access-Control-Allow-Headers'] = '*';
+      resHeaders['Access-Control-Allow-Methods'] = '*';
+      response.writeHead(upstream.status, resHeaders);
+      const arrayBuffer = await upstream.arrayBuffer();
+      response.end(Buffer.from(arrayBuffer));
+      return;
+    } catch (err) {
+      console.error('Supabase proxy error:', err);
+      return sendError(response, 502, 'Supabase proxy failure');
+    }
   }
 
   if (method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return serveIndex(response);
